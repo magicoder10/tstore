@@ -23,7 +23,10 @@ The next generation data store optimized for
 - [ ] User management & access control
 - [ ] Real time query subscription
 - [ ] B+ tree based indexing
-- [ ] Multi instance data store with partitioning
+- [ ] Multi instance data store
+  - [ ] Partitioning
+  - [ ] Consistent hashing
+  - [ ] Data replication
 
 ## Prerequisites
 
