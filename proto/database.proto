@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "store/proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service Database {
+  rpc ListAllDatabases(google.protobuf.Empty) returns (Databases);
+  rpc CreateDatabase(CreateDatabaseRequest) returns (google.protobuf.Empty);
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
+  rpc CreateTransaction(CreateTransactionRequest) returns (google.protobuf.Empty);
+  rpc GetLatestCommit(GetLatestCommitRequest) returns (Commit);
+  rpc QueryEntities(QueryEntitiesRequest) returns (Entities);
+  rpc QueryGroups(QueryGroupsRequest) returns (Groups);
+}
+
+message CreateDatabaseRequest {
+  string name = 1;
+}
+
+message DeleteDatabaseRequest {
+  string name = 1;
+}
+
+message CreateTransactionRequest {
+  string dbName = 1;
+  Transaction transaction = 2;
+}
+
+message GetLatestCommitRequest {
+  string dbName = 1;
+}
+
+message QueryEntitiesRequest {
+  string dbName = 1;
+  uint64 transactionID = 2;
+  Expression query = 3;
+}
+
+message QueryGroupsRequest {
+  string dbName = 1;
+  uint64 transactionID = 2;
+  Expression query = 3;
+}
+
+// core entities
+
+message Transaction {
+  map<string, Mutations> mutations = 1;
+}
+
+message Mutations {
+  repeated Mutation mutations = 1;
+}
+
+enum MutationType {
+  CreateSchema = 0;
+  DeleteSchema = 1;
+  CreateSchemaAttributes = 2;
+  DeleteSchemaAttributes = 3;
+  CreateEntity = 4;
+  DeleteEntity = 5;
+  CreateEntityAttributes = 6;
+  DeleteEntityAttributes = 7;
+  UpdateEntityAttributes = 8;
+}
+
+message Mutation {
+  MutationType type = 1;
+  SchemaInput schemaInput = 2;
+  EntityInput entityInput = 3;
+}
+
+enum DataType {
+  Int = 0;
+  Decimal = 1;
+  Bool = 2;
+  String = 3;
+  Rune = 4;
+  Datetime = 5;
+  FilterExpression = 6;
+  CollectorExpression = 7;
+  GroupCollectorExpression = 8;
+}
+
+message Value {
+  DataType type = 1;
+  string content = 2;
+}
+
+message SchemaInput {
+  string name = 1;
+  map<string, DataType> attributesToCreateOrUpdate = 2;
+  repeated string attributesToDelete = 3;
+}
+
+message EntityInput {
+  uint64 entityID = 1;
+  string schemaName = 2;
+  map<string, Value> attributesToCreateOrUpdate = 3;
+  repeated string attributesToDelete = 4;
+}
+
+message Commit {
+  uint64 committedTransactionId = 1;
+  google.protobuf.Timestamp committedAt = 2;
+}
+
+message Entity {
+  uint64 id = 1;
+  string schemaName = 2;
+  map<string, Value> attributes = 3;
+}
+
+message Entities {
+  repeated Entity entities = 1;
+}
+
+message Groups {
+  map<string, Entities> groups = 1;
+}
+
+message Databases {
+  repeated string database = 1;
+}
+
+enum Operator {
+  None = 0;
+  And = 1;
+  Or = 2;
+  Not = 3;
+  EqualTo = 4;
+  Contains = 5;
+  LessThan = 6;
+  LessThanOrEqualTo = 7;
+  GreaterThan = 8;
+  GreaterThanOrEqualTo = 9;
+  Find = 10;
+  Take = 11;
+  Asc = 12;
+  Desc = 13;
+  GroupBy = 14;
+  EachGroup = 15;
+}
+
+message Expression {
+  bool IsValue = 1;
+  string value = 2;
+  Operator operator = 3;
+  repeated Expression inputs = 4;
+  DataType outputDataType = 5;
+}
