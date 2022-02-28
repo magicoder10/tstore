@@ -7,6 +7,7 @@ import (
 
 	"tstore/data"
 	"tstore/query/lang"
+	"tstore/types"
 )
 
 func evaluateCollector(expression lang.Expression) (Collector, error) {
@@ -267,7 +268,7 @@ func evaluateComparison(
 	}
 }
 
-func createComparisonFilter[Value data.Comparable](operator lang.Operator, attribute string, target Value) (Filter, lang.DataType, error) {
+func createComparisonFilter[Value types.Comparable](operator lang.Operator, attribute string, target Value) (Filter, lang.DataType, error) {
 	selector := getAttributeSelector(attribute)
 	switch operator {
 	case lang.LessThanOperator:

@@ -1,7 +1,7 @@
 package lang
 
 import (
-	"tstore/data"
+	"tstore/types"
 )
 
 type Filter Expression
@@ -45,19 +45,19 @@ func Contain[Value comparable](attribute string, target Value) Filter {
 	return comparison(ContainsOperator, attribute, target)
 }
 
-func GreaterThan[Value data.Comparable](attribute string, target Value) Filter {
+func GreaterThan[Value types.Comparable](attribute string, target Value) Filter {
 	return comparison(GreaterThanOperator, attribute, target)
 }
 
-func GreaterThanOrEqualTo[Value data.Comparable](attribute string, target Value) Filter {
+func GreaterThanOrEqualTo[Value types.Comparable](attribute string, target Value) Filter {
 	return comparison(GreaterThanOrEqualToOperator, attribute, target)
 }
 
-func LessThan[Value data.Comparable](attribute string, target Value) Filter {
+func LessThan[Value types.Comparable](attribute string, target Value) Filter {
 	return comparison(LessThanOperator, attribute, target)
 }
 
-func LessThanOrEqualTo[Value data.Comparable](attribute string, target Value) Filter {
+func LessThanOrEqualTo[Value types.Comparable](attribute string, target Value) Filter {
 	return comparison(LessThanOrEqualToOperator, attribute, target)
 }
 

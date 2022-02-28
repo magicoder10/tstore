@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"tstore/data"
+	"tstore/types"
 )
 
 const bufferSize = 500
@@ -490,7 +491,7 @@ func validateEntityAttribute(dataType data.Type, value interface{}) error {
 	return nil
 }
 
-func getMapKeys[Key data.Comparable, Value any](input map[Key]Value) []Key {
+func getMapKeys[Key types.Comparable, Value any](input map[Key]Value) []Key {
 	keys := make([]Key, 0)
 	for key := range input {
 		keys = append(keys, key)

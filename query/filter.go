@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"tstore/data"
+	"tstore/types"
 )
 
 type Filter func(entity data.Entity) bool
@@ -32,7 +33,7 @@ func Not(filter Filter) Filter {
 
 type Selector func(entity data.Entity) interface{}
 
-func EqualTo[Value data.Equatable](selector Selector, target Value) Filter {
+func EqualTo[Value types.Equatable](selector Selector, target Value) Filter {
 	return func(entity data.Entity) bool {
 		return selector(entity).(Value) == target
 	}
@@ -44,25 +45,25 @@ func Contains(selector Selector, target string) Filter {
 	}
 }
 
-func GreaterThan[Value data.Comparable](selector Selector, target Value) Filter {
+func GreaterThan[Value types.Comparable](selector Selector, target Value) Filter {
 	return func(entity data.Entity) bool {
 		return selector(entity).(Value) > target
 	}
 }
 
-func GreaterThanOrEqualTo[Value data.Comparable](selector Selector, target Value) Filter {
+func GreaterThanOrEqualTo[Value types.Comparable](selector Selector, target Value) Filter {
 	return func(entity data.Entity) bool {
 		return selector(entity).(Value) >= target
 	}
 }
 
-func LessThan[Value data.Comparable](selector Selector, target Value) Filter {
+func LessThan[Value types.Comparable](selector Selector, target Value) Filter {
 	return func(entity data.Entity) bool {
 		return selector(entity).(Value) < target
 	}
 }
 
-func LessThanOrEqualTo[Value data.Comparable](selector Selector, target Value) Filter {
+func LessThanOrEqualTo[Value types.Comparable](selector Selector, target Value) Filter {
 	return func(entity data.Entity) bool {
 		return selector(entity).(Value) <= target
 	}

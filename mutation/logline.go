@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"tstore/data"
+	"tstore/types"
 )
 
 type LogLine interface {
@@ -199,7 +200,7 @@ func (t TransactionUpdateEntityAttributesLogLine) Line() string {
 
 var _ LogLine = (*TransactionUpdateEntityAttributesLogLine)(nil)
 
-func mapToString[Key data.Comparable, Value any](input map[Key]Value) string {
+func mapToString[Key types.Comparable, Value any](input map[Key]Value) string {
 	var pairs []string
 	for key, value := range input {
 		// TODO: encode value to remove special character
