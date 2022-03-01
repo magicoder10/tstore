@@ -10,22 +10,22 @@ type History[
 	CommitID types.Comparable,
 	Value any,
 	Change any] struct {
-	commitMap     map[CommitID]VersionStatus
-	valueHistory  ValueHistory[CommitID, Value, Change]
-	commitHistory []CommitID
+	CommitMap     map[CommitID]VersionStatus            `json:"commit_map"`
+	ValueHistory  ValueHistory[CommitID, Value, Change] `json:"value_history"`
+	CommitHistory []CommitID                            `json:"commit_history"`
 }
 
 func (h History[CommitID, Value, Change]) Value(targetCommitID CommitID) (Value, bool) {
-	endCommitID, err := findLargestSmallerThan[CommitID](h.commitHistory, targetCommitID)
+	endCommitID, err := findLargestSmallerThan[CommitID](h.CommitHistory, targetCommitID)
 	if err != nil {
 		return *new(Value), false
 	}
 
-	versionStatus := h.commitMap[endCommitID]
+	versionStatus := h.CommitMap[endCommitID]
 	if versionStatus == DeletedVersionStatus {
 		return *new(Value), false
 	} else {
-		return h.valueHistory.Value(endCommitID), true
+		return h.ValueHistory.Value(endCommitID), true
 	}
 }
 
@@ -33,15 +33,15 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 	beginCommitID CommitID,
 	endCommitID CommitID,
 ) []Version[Value] {
-	inBetweenCommitIDs := findAllInBetween(h.commitHistory, beginCommitID, endCommitID)
+	inBetweenCommitIDs := findAllInBetween(h.CommitHistory, beginCommitID, endCommitID)
 	var versions []Version[Value]
 
 	for _, commitID := range inBetweenCommitIDs {
-		versionStatus := h.commitMap[commitID]
+		versionStatus := h.CommitMap[commitID]
 
 		var value Value
 		if versionStatus != DeletedVersionStatus {
-			value = h.valueHistory.Value(commitID)
+			value = h.ValueHistory.Value(commitID)
 		}
 
 		version := Version[Value]{
@@ -59,17 +59,17 @@ func (h *History[CommitID, Value, Change]) AddNewVersion(
 	versionStatus VersionStatus,
 	change Change,
 ) bool {
-	_, ok := h.commitMap[commitID]
+	_, ok := h.CommitMap[commitID]
 	if ok {
 		return false
 	}
 
 	if versionStatus != DeletedVersionStatus {
-		h.valueHistory.AddNewVersion(commitID, change)
+		h.ValueHistory.AddNewVersion(commitID, change)
 	}
 
-	h.commitHistory = append(([]CommitID)(h.commitHistory), commitID)
-	h.commitMap[commitID] = versionStatus
+	h.CommitHistory = append(([]CommitID)(h.CommitHistory), commitID)
+	h.CommitMap[commitID] = versionStatus
 
 	return true
 }
@@ -81,9 +81,9 @@ func New[
 	valueHistory ValueHistory[CommitID, Value, Change],
 ) *History[CommitID, Value, Change] {
 	return &History[CommitID, Value, Change]{
-		commitMap:     make(map[CommitID]VersionStatus),
-		valueHistory:  valueHistory,
-		commitHistory: make([]CommitID, 0),
+		CommitMap:     make(map[CommitID]VersionStatus),
+		ValueHistory:  valueHistory,
+		CommitHistory: make([]CommitID, 0),
 	}
 }
 

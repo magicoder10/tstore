@@ -9,6 +9,6 @@ const (
 )
 
 type Version[Value any] struct {
-	Status VersionStatus
-	Value  Value
+	Status VersionStatus `json:"status"`
+	Value  Value         `json:"value"`
 }

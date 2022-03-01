@@ -18,16 +18,16 @@ var fromProtoDataType = map[DataType]lang.DataType{
 	DataType_Datetime: lang.DatetimeDataType,
 }
 
-var fromProtoMutationType = map[MutationType]mutation.Type{
-	MutationType_CreateSchema:           mutation.CreateSchemaMutation,
-	MutationType_DeleteSchema:           mutation.DeleteSchemaMutation,
-	MutationType_CreateSchemaAttributes: mutation.CreateSchemaAttributes,
-	MutationType_DeleteSchemaAttributes: mutation.DeleteSchemaAttributes,
-	MutationType_CreateEntity:           mutation.CreateEntityMutation,
-	MutationType_DeleteEntity:           mutation.DeleteEntityMutation,
-	MutationType_CreateEntityAttributes: mutation.CreateEntityAttributes,
-	MutationType_DeleteEntityAttributes: mutation.DeleteEntityAttributes,
-	MutationType_UpdateEntityAttributes: mutation.UpdateEntityAttributes,
+var fromProtoMutationType = map[MutationType]data.MutationType{
+	MutationType_CreateSchema:           data.CreateSchemaMutation,
+	MutationType_DeleteSchema:           data.DeleteSchemaMutation,
+	MutationType_CreateSchemaAttributes: data.CreateSchemaAttributesMutation,
+	MutationType_DeleteSchemaAttributes: data.DeleteSchemaAttributesMutation,
+	MutationType_CreateEntity:           data.CreateEntityMutation,
+	MutationType_DeleteEntity:           data.DeleteEntityMutation,
+	MutationType_CreateEntityAttributes: data.CreateEntityAttributesMutation,
+	MutationType_DeleteEntityAttributes: data.DeleteEntityAttributesMutation,
+	MutationType_UpdateEntityAttributes: data.UpdateEntityAttributesMutation,
 }
 
 var fromProtoOperator = map[Operator]lang.Operator{
@@ -35,6 +35,7 @@ var fromProtoOperator = map[Operator]lang.Operator{
 	Operator_And:                  lang.AndOperator,
 	Operator_Or:                   lang.OrOperator,
 	Operator_Not:                  lang.NotOperator,
+	Operator_All:                  lang.AllOperator,
 	Operator_EqualTo:              lang.EqualToOperator,
 	Operator_Contains:             lang.ContainsOperator,
 	Operator_LessThan:             lang.LessThanOperator,
@@ -50,7 +51,7 @@ var fromProtoOperator = map[Operator]lang.Operator{
 }
 
 func FromProtoTransactionInput(protoTransactionInput *Transaction) (mutation.TransactionInput, error) {
-	mutationsMap := make(map[string][]mutation.Mutation)
+	mutationsMap := make(map[string][]data.Mutation)
 	for schema, protoMutations := range protoTransactionInput.Mutations {
 		mutations, err := fromProtoMutations(protoMutations)
 		if err != nil {
@@ -140,12 +141,12 @@ func fromProtoEntity(protoEntity *Entity) (data.Entity, error) {
 	}, nil
 }
 
-func fromProtoMutations(protoMutations *Mutations) ([]mutation.Mutation, error) {
+func fromProtoMutations(protoMutations *Mutations) ([]data.Mutation, error) {
 	if protoMutations == nil {
 		return nil, nil
 	}
 
-	mutations := make([]mutation.Mutation, 0)
+	mutations := make([]data.Mutation, 0)
 	for _, protoMutation := range protoMutations.Mutations {
 		mut, err := fromProtoMutation(protoMutation)
 		if err != nil {
@@ -158,27 +159,27 @@ func fromProtoMutations(protoMutations *Mutations) ([]mutation.Mutation, error) 
 	return mutations, nil
 }
 
-func fromProtoMutation(protoMutation *Mutation) (mutation.Mutation, error) {
+func fromProtoMutation(protoMutation *Mutation) (data.Mutation, error) {
 	schemaInput, err := fromProtoSchemaInput(protoMutation.SchemaInput)
 	if err != nil {
-		return mutation.Mutation{}, err
+		return data.Mutation{}, err
 	}
 
 	entityInput, err := fromProtoEntityInput(protoMutation.EntityInput)
 	if err != nil {
-		return mutation.Mutation{}, err
+		return data.Mutation{}, err
 	}
 
-	return mutation.Mutation{
+	return data.Mutation{
 		Type:        fromProtoMutationType[protoMutation.Type],
 		SchemaInput: schemaInput,
 		EntityInput: entityInput,
 	}, nil
 }
 
-func fromProtoSchemaInput(protoSchemaInput *SchemaInput) (mutation.SchemaInput, error) {
+func fromProtoSchemaInput(protoSchemaInput *SchemaInput) (data.SchemaInput, error) {
 	if protoSchemaInput == nil {
-		return mutation.SchemaInput{}, nil
+		return data.SchemaInput{}, nil
 	}
 
 	createOrUpdateAttributes := make(map[string]data.Type)
@@ -186,34 +187,34 @@ func fromProtoSchemaInput(protoSchemaInput *SchemaInput) (mutation.SchemaInput, 
 		langDataType := fromProtoDataType[dataType]
 		dbDataType, ok := lang.ToDatabaseDataType[langDataType]
 		if !ok {
-			return mutation.SchemaInput{}, fmt.Errorf("unsupported dataType: %v", dataType)
+			return data.SchemaInput{}, fmt.Errorf("unsupported dataType: %v", dataType)
 		}
 		createOrUpdateAttributes[attribute] = dbDataType
 	}
 
-	return mutation.SchemaInput{
+	return data.SchemaInput{
 		Name:                       protoSchemaInput.Name,
 		AttributesToCreateOrUpdate: createOrUpdateAttributes,
 		AttributesToDelete:         protoSchemaInput.AttributesToDelete,
 	}, nil
 }
 
-func fromProtoEntityInput(protoEntityInput *EntityInput) (mutation.EntityInput, error) {
+func fromProtoEntityInput(protoEntityInput *EntityInput) (data.EntityInput, error) {
 	if protoEntityInput == nil {
-		return mutation.EntityInput{}, nil
+		return data.EntityInput{}, nil
 	}
 
 	createOrUpdateAttributes := make(map[string]interface{})
 	for attribute, protoValue := range protoEntityInput.AttributesToCreateOrUpdate {
 		value, err := fromProtoValue(protoValue)
 		if err != nil {
-			return mutation.EntityInput{}, err
+			return data.EntityInput{}, err
 		}
 
 		createOrUpdateAttributes[attribute] = value
 	}
 
-	return mutation.EntityInput{
+	return data.EntityInput{
 		EntityID:                   protoEntityInput.EntityID,
 		SchemaName:                 protoEntityInput.SchemaName,
 		AttributesToCreateOrUpdate: createOrUpdateAttributes,

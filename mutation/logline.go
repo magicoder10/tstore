@@ -44,7 +44,7 @@ var _ LogLine = (*TransactionAbortedLogLine)(nil)
 
 type TransactionCreateSchemaLogLine struct {
 	TransactionID uint64
-	MutationType  Type
+	MutationType  data.MutationType
 	SchemaName    string
 }
 
@@ -60,7 +60,7 @@ var _ LogLine = (*TransactionCreateSchemaLogLine)(nil)
 
 type TransactionDeleteSchemaLogLine struct {
 	TransactionID  uint64
-	MutationType   Type
+	MutationType   data.MutationType
 	SchemaName     string
 	PrevAttributes map[string]data.Type
 }
@@ -78,7 +78,7 @@ var _ LogLine = (*TransactionDeleteSchemaLogLine)(nil)
 
 type TransactionCreateSchemaAttributesLogLine struct {
 	TransactionID     uint64
-	MutationType      Type
+	MutationType      data.MutationType
 	SchemaName        string
 	CreatedAttributes []string
 }
@@ -96,7 +96,7 @@ var _ LogLine = (*TransactionCreateSchemaAttributesLogLine)(nil)
 
 type TransactionDeleteSchemaAttributesLogLine struct {
 	TransactionID  uint64
-	MutationType   Type
+	MutationType   data.MutationType
 	SchemaName     string
 	PrevAttributes map[string]data.Type
 }
@@ -114,7 +114,7 @@ var _ LogLine = (*TransactionDeleteSchemaAttributesLogLine)(nil)
 
 type TransactionCreateEntityLogLine struct {
 	TransactionID uint64
-	MutationType  Type
+	MutationType  data.MutationType
 	EntityID      uint64
 }
 
@@ -130,7 +130,7 @@ var _ LogLine = (*TransactionCreateEntityLogLine)(nil)
 
 type TransactionDeleteEntityLogLine struct {
 	TransactionID  uint64
-	MutationType   Type
+	MutationType   data.MutationType
 	EntityID       uint64
 	PrevAttributes map[string]interface{}
 }
@@ -148,7 +148,7 @@ var _ LogLine = (*TransactionDeleteEntityLogLine)(nil)
 
 type TransactionCreateEntityAttributesLogLine struct {
 	TransactionID     uint64
-	MutationType      Type
+	MutationType      data.MutationType
 	EntityID          uint64
 	CreatedAttributes []string
 }
@@ -166,7 +166,7 @@ var _ LogLine = (*TransactionCreateEntityAttributesLogLine)(nil)
 
 type TransactionDeleteEntityAttributesLogLine struct {
 	TransactionID  uint64
-	MutationType   Type
+	MutationType   data.MutationType
 	EntityID       uint64
 	PrevAttributes map[string]interface{}
 }
@@ -184,7 +184,7 @@ var _ LogLine = (*TransactionDeleteEntityAttributesLogLine)(nil)
 
 type TransactionUpdateEntityAttributesLogLine struct {
 	TransactionID  uint64
-	MutationType   Type
+	MutationType   data.MutationType
 	EntityID       uint64
 	PrevAttributes map[string]interface{}
 }

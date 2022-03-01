@@ -10,25 +10,25 @@ type ValueHistory[CommitID types.Comparable, Value any, Change any] interface {
 }
 
 type SingleValueHistory[CommitID types.Comparable, Value any] struct {
-	commits map[CommitID]Value
+	Commits map[CommitID]Value `json:"commits"`
 }
 
 func (s SingleValueHistory[CommitID, Value]) Value(commitID CommitID) Value {
-	return s.commits[commitID]
+	return s.Commits[commitID]
 }
 
 func (s *SingleValueHistory[CommitID, Value]) AddNewVersion(commitID CommitID, change Value) bool {
-	_, ok := s.commits[commitID]
+	_, ok := s.Commits[commitID]
 	if ok {
 		return false
 	}
 
-	s.commits[commitID] = change
+	s.Commits[commitID] = change
 	return true
 }
 
 func NewSingleValueHistory[CommitID types.Comparable, Value any]() *SingleValueHistory[CommitID, Value] {
 	return &SingleValueHistory[CommitID, Value]{
-		commits: make(map[CommitID]Value),
+		Commits: make(map[CommitID]Value),
 	}
 }

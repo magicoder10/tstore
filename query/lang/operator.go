@@ -7,6 +7,7 @@ const (
 	AndOperator                  Operator = "And"
 	OrOperator                   Operator = "Or"
 	NotOperator                  Operator = "Not"
+	AllOperator                  Operator = "All"
 	EqualToOperator              Operator = "EqualTo"
 	ContainsOperator             Operator = "Contains"
 	LessThanOperator             Operator = "LessThan"

@@ -17,22 +17,23 @@ var toProtoDataType = map[lang.DataType]DataType{
 	lang.DatetimeDataType: DataType_Datetime,
 }
 
-var toProtoMutationType = map[mutation.Type]MutationType{
-	mutation.CreateSchemaMutation:   MutationType_CreateSchema,
-	mutation.DeleteSchemaMutation:   MutationType_DeleteSchema,
-	mutation.CreateSchemaAttributes: MutationType_CreateSchemaAttributes,
-	mutation.DeleteSchemaAttributes: MutationType_DeleteSchemaAttributes,
-	mutation.CreateEntityMutation:   MutationType_CreateEntity,
-	mutation.DeleteEntityMutation:   MutationType_DeleteEntity,
-	mutation.CreateEntityAttributes: MutationType_CreateEntityAttributes,
-	mutation.DeleteEntityAttributes: MutationType_DeleteEntityAttributes,
-	mutation.UpdateEntityAttributes: MutationType_UpdateEntityAttributes,
+var toProtoMutationType = map[data.MutationType]MutationType{
+	data.CreateSchemaMutation:           MutationType_CreateSchema,
+	data.DeleteSchemaMutation:           MutationType_DeleteSchema,
+	data.CreateSchemaAttributesMutation: MutationType_CreateSchemaAttributes,
+	data.DeleteSchemaAttributesMutation: MutationType_DeleteSchemaAttributes,
+	data.CreateEntityMutation:           MutationType_CreateEntity,
+	data.DeleteEntityMutation:           MutationType_DeleteEntity,
+	data.CreateEntityAttributesMutation: MutationType_CreateEntityAttributes,
+	data.DeleteEntityAttributesMutation: MutationType_DeleteEntityAttributes,
+	data.UpdateEntityAttributesMutation: MutationType_UpdateEntityAttributes,
 }
 
 var toProtoOperator = map[lang.Operator]Operator{
 	lang.AndOperator:                  Operator_And,
 	lang.OrOperator:                   Operator_Or,
 	lang.NotOperator:                  Operator_Not,
+	lang.AllOperator:                  Operator_All,
 	lang.EqualToOperator:              Operator_EqualTo,
 	lang.ContainsOperator:             Operator_Contains,
 	lang.LessThanOperator:             Operator_LessThan,
@@ -76,7 +77,7 @@ func ToProtoExpression(expression lang.Expression) *Expression {
 	}
 }
 
-func toProtoMutations(mutations []mutation.Mutation) *Mutations {
+func toProtoMutations(mutations []data.Mutation) *Mutations {
 	protoMutations := make([]*Mutation, 0)
 	for _, mut := range mutations {
 		protoMutations = append(protoMutations, toProtoMutation(mut))
@@ -85,7 +86,7 @@ func toProtoMutations(mutations []mutation.Mutation) *Mutations {
 	return &Mutations{Mutations: protoMutations}
 }
 
-func toProtoMutation(mut mutation.Mutation) *Mutation {
+func toProtoMutation(mut data.Mutation) *Mutation {
 	schemaInput := toProtoSchemaInput(mut.SchemaInput)
 	entityInput := toProtoEntityInput(mut.EntityInput)
 	return &Mutation{
@@ -95,7 +96,7 @@ func toProtoMutation(mut mutation.Mutation) *Mutation {
 	}
 }
 
-func toProtoSchemaInput(schemaInput mutation.SchemaInput) *SchemaInput {
+func toProtoSchemaInput(schemaInput data.SchemaInput) *SchemaInput {
 	createOrUpdateAttributes := make(map[string]DataType)
 	for attribute, dataType := range schemaInput.AttributesToCreateOrUpdate {
 		createOrUpdateAttributes[attribute] = toProtoDataType[lang.FromDatabaseDataType[dataType]]
@@ -108,7 +109,7 @@ func toProtoSchemaInput(schemaInput mutation.SchemaInput) *SchemaInput {
 	}
 }
 
-func toProtoEntityInput(entityInput mutation.EntityInput) *EntityInput {
+func toProtoEntityInput(entityInput data.EntityInput) *EntityInput {
 	createOrUpdateAttributes := make(map[string]*Value)
 	for attribute, value := range entityInput.AttributesToCreateOrUpdate {
 		protoDataType := toProtoDataType[lang.GetDataType(value)]

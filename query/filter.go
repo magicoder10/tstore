@@ -31,6 +31,10 @@ func Not(filter Filter) Filter {
 
 // Comparison filters
 
+var All Filter = func(entity data.Entity) bool {
+	return true
+}
+
 type Selector func(entity data.Entity) interface{}
 
 func EqualTo[Value types.Equatable](selector Selector, target Value) Filter {

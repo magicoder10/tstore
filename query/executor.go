@@ -9,37 +9,34 @@ type Executor struct {
 	dataStorage *data.Storage
 }
 
-func (e Executor) QueryEntities(transactionID uint64, query lang.Expression) ([]data.Entity, error) {
+func (e Executor) QueryEntities(commitID uint64, query lang.Expression) ([]data.Entity, error) {
 	collector, err := evaluateCollector(query)
 	if err != nil {
 		return nil, err
 	}
 
-	entities, err := e.getEntitiesAtTransaction(transactionID)
-	if err != nil {
-		return nil, err
-	}
-
+	entities := e.getEntitiesAtCommit(commitID)
 	return collector(entities), nil
 }
 
-func (e Executor) QueryEntityGroups(transactionID uint64, query lang.Expression) (Groups, error) {
+func (e Executor) QueryEntityGroups(commitID uint64, query lang.Expression) (Groups, error) {
 	groupCollector, err := evaluateGroupCollector(query)
 	if err != nil {
 		return nil, err
 	}
 
-	entities, err := e.getEntitiesAtTransaction(transactionID)
-	if err != nil {
-		return nil, err
-	}
-
+	entities := e.getEntitiesAtCommit(commitID)
 	return groupCollector(entities), nil
 }
 
-func (e Executor) getEntitiesAtTransaction(transactionID uint64) ([]data.Entity, error) {
-	// TODO: query entities for a given transaction only
-	return e.dataStorage.ReadAllEntities()
+func (e Executor) getEntitiesAtCommit(commitID uint64) []data.Entity {
+	entityMap := e.dataStorage.EntityHistories.ListAllLatestValuesAt(commitID)
+	entities := make([]data.Entity, 0)
+	for _, entity := range entityMap {
+		entities = append(entities, entity)
+	}
+
+	return entities
 }
 
 func NewExecutor(dataStorage *data.Storage) Executor {

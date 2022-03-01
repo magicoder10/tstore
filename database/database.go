@@ -1,8 +1,6 @@
 package database
 
 import (
-	"errors"
-
 	"tstore/data"
 	"tstore/mutation"
 	"tstore/query"
@@ -11,7 +9,7 @@ import (
 
 type Database struct {
 	databaseStorage Storage
-	dataStorage     data.Storage
+	dataStorage     *data.Storage
 	mutator         *mutation.Mutator
 	queryExecutor   query.Executor
 }
@@ -20,12 +18,12 @@ func (d Database) CreateTransaction(transactionInput mutation.TransactionInput) 
 	return d.mutator.CreateTransaction(transactionInput)
 }
 
-func (d Database) QueryEntities(transactionID uint64, query lang.Expression) ([]data.Entity, error) {
-	return d.queryExecutor.QueryEntities(transactionID, query)
+func (d Database) QueryEntities(commitID uint64, query lang.Expression) ([]data.Entity, error) {
+	return d.queryExecutor.QueryEntities(commitID, query)
 }
 
-func (d Database) QueryEntityGroups(transactionID uint64, query lang.Expression) (query.Groups, error) {
-	return d.queryExecutor.QueryEntityGroups(transactionID, query)
+func (d Database) QueryEntityGroups(commitID uint64, query lang.Expression) (query.Groups, error) {
+	return d.queryExecutor.QueryEntityGroups(commitID, query)
 }
 
 func (d Database) GetLatestCommit() (data.Commit, error) {
@@ -35,7 +33,9 @@ func (d Database) GetLatestCommit() (data.Commit, error) {
 	}
 
 	if len(commits) < 1 {
-		return data.Commit{}, errors.New("no commit found")
+		return data.Commit{
+			CommittedTransactionID: 0,
+		}, nil
 	}
 
 	return commits[len(commits)-1], nil
@@ -46,12 +46,8 @@ func (d Database) DeleteAllData() error {
 }
 
 func NewDatabase(name string) (Database, error) {
-	dataStorage, err := data.NewStorage(name)
-	if err != nil {
-		return Database{}, err
-	}
-
-	mutator, err := mutation.NewMutator(&dataStorage, name)
+	dataStorage := data.NewStorage(name)
+	mutator, err := mutation.NewMutator(dataStorage, name)
 	if err != nil {
 		return Database{}, err
 	}
@@ -61,6 +57,6 @@ func NewDatabase(name string) (Database, error) {
 		databaseStorage: newStorage(name),
 		dataStorage:     dataStorage,
 		mutator:         mutator,
-		queryExecutor:   query.NewExecutor(&dataStorage),
+		queryExecutor:   query.NewExecutor(dataStorage),
 	}, nil
 }

@@ -53,7 +53,7 @@ func (g GRPCServer) QueryEntities(ctx context.Context, request *proto.QueryEntit
 	}
 
 	query := proto.FromProtoExpression(request.Query)
-	entities, err := g.server.QueryEntities(request.DbName, request.TransactionID, *query)
+	entities, err := g.server.QueryEntities(request.DbName, request.TransactionId, *query)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (g GRPCServer) QueryGroups(ctx context.Context, request *proto.QueryGroupsR
 	}
 
 	query := proto.FromProtoExpression(request.Query)
-	groups, err := g.server.QueryEntityGroups(request.DbName, request.TransactionID, *query)
+	groups, err := g.server.QueryEntityGroups(request.DbName, request.TransactionId, *query)
 	if err != nil {
 		return nil, err
 	}

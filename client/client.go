@@ -68,7 +68,7 @@ func (c *Client) QueryEntities(dbName string, transactionID uint64, collector la
 	ctx := context.Background()
 	entities, err := c.databaseClient.QueryEntities(ctx, &proto.QueryEntitiesRequest{
 		DbName:        dbName,
-		TransactionID: transactionID,
+		TransactionId: transactionID,
 		Query:         protoExpression,
 	})
 	if err != nil {
@@ -83,7 +83,7 @@ func (c *Client) QueryGroups(dbName string, transactionID uint64, collector lang
 	ctx := context.Background()
 	groups, err := c.databaseClient.QueryGroups(ctx, &proto.QueryGroupsRequest{
 		DbName:        dbName,
-		TransactionID: transactionID,
+		TransactionId: transactionID,
 		Query:         protoExpression,
 	})
 	if err != nil {

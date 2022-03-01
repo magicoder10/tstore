@@ -37,6 +37,12 @@ func Not(filter Filter) Filter {
 
 // Comparison filters
 
+var All = Filter(Expression{
+	IsValue:        false,
+	Operator:       AllOperator,
+	OutputDataType: FilterExpressionDataType,
+})
+
 func EqualTo[Value comparable](attribute string, target Value) Filter {
 	return comparison(EqualToOperator, attribute, target)
 }

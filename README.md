@@ -14,19 +14,23 @@ The next generation data store optimized for
 - [x] Queue & commit incoming transactions
 - [x] Generate transaction undo log
 - [x] Fetch entities with custom queries
-- [ ] Notify client when the transaction is committed
-- [ ] Query the latest committed transaction IDs at a given time
-- [ ] Query the entities at a given commit
+- [x] Query the latest committed transaction ID at a given time
+- [x] Query the entities at a given commit
 - [ ] Query the change of entities between 2 given commits
 - [ ] Query schemas for a give DB
+- [ ] Notify client when the transaction is committed
 - [ ] Abort uncommitted transaction
+- [ ] Persist versioned entities & schema
+- [ ] Design data transformation language & APIs
 - [ ] User management & access control
 - [ ] Real time query subscription
-- [ ] B+ tree based indexing
-- [ ] Multi instance data store
+- [ ] Indexing (B+ tree)
+- [ ] Distributed storage backend
     - [ ] Partitioning
     - [ ] Consistent hashing
     - [ ] Data replication
+- [ ] Distributed query processing
+- [ ] Distributed transaction processing
 
 ## Prerequisites
 
@@ -50,7 +54,17 @@ The next generation data store optimized for
     ```
 
 4. Here is the sample output
-   ```
-   has latest commit: {1 2022-02-27 06:55:12.108527 +0000 UTC}
-   [{1 user map[firstName:Harry lastName:Potter]} {2 user map[firstName:Tony lastName:Stark]} {3 user map[firstName:Princess lastName:Leia]}]
+   ```txt
+    has latest commit: {3 2022-03-01 02:08:56.661596 +0000 UTC}
+    Transaction ID: 0
+    []
+    
+    Transaction ID: 1
+    [{1 user map[firstName:Harry lastName:Potter]}]
+    
+    Transaction ID: 2
+    [{1 user map[firstName:Harry lastName:What]} {2 user map[firstName:Tony lastName:Stark]}]
+    
+    Transaction ID: 3
+    [{2 user map[firstName:Tony lastName:Stark]} {3 user map[firstName:Princess lastName:Leia]} {1 user map[firstName:Harry lastName:What]}]
    ```

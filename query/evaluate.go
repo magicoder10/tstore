@@ -61,6 +61,8 @@ func evaluateExpression(expression lang.Expression) (interface{}, lang.DataType,
 		}
 
 		return evaluateNot(expression.Inputs[0])
+	case lang.AllOperator:
+		return All, lang.FilterExpressionDataType, nil
 	case lang.EqualToOperator:
 		if len(expression.Inputs) != 2 {
 			return nil, "", errors.New("and must have 2 parameters")

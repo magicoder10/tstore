@@ -7,7 +7,6 @@ import (
 	"tstore/client"
 	"tstore/data"
 	"tstore/mutation"
-	"tstore/query"
 	"tstore/query/lang"
 )
 
@@ -22,79 +21,116 @@ func main() {
 	defer cl.Close()
 
 	dbName := "example"
-	err = cl.CreateDatabase(dbName)
-	if err != nil {
-		panic(err)
-	}
+	cl.CreateDatabase(dbName)
 
 	schemaName := "user"
-
-	err = cl.CreateTransaction(dbName, mutation.TransactionInput{
-		Mutations: map[string][]mutation.Mutation{
-			schemaName: {
-				{
-					Type: mutation.CreateSchemaMutation,
-					SchemaInput: mutation.SchemaInput{
-						Name: schemaName,
-						AttributesToCreateOrUpdate: map[string]data.Type{
-							"firstName": data.StringDataType,
-							"lastName":  data.StringDataType,
+	transactions := []mutation.TransactionInput{
+		{
+			Mutations: map[string][]data.Mutation{
+				schemaName: {
+					{
+						Type: data.CreateSchemaMutation,
+						SchemaInput: data.SchemaInput{
+							Name: schemaName,
+							AttributesToCreateOrUpdate: map[string]data.Type{
+								"firstName": data.StringDataType,
+								"lastName":  data.StringDataType,
+							},
 						},
 					},
-				},
-				{
-					Type: mutation.CreateEntityMutation,
-					EntityInput: mutation.EntityInput{
-						SchemaName: schemaName,
-						AttributesToCreateOrUpdate: map[string]interface{}{
-							"firstName": "Harry",
-							"lastName":  "Potter",
-						},
-					},
-				},
-				{
-					Type: mutation.CreateEntityMutation,
-					EntityInput: mutation.EntityInput{
-						SchemaName: schemaName,
-						AttributesToCreateOrUpdate: map[string]interface{}{
-							"firstName": "Tony",
-							"lastName":  "Stark",
-						},
-					},
-				},
-				{
-					Type: mutation.CreateEntityMutation,
-					EntityInput: mutation.EntityInput{
-						SchemaName: schemaName,
-						AttributesToCreateOrUpdate: map[string]interface{}{
-							"firstName": "Princess",
-							"lastName":  "Leia",
+					{
+						Type: data.CreateEntityMutation,
+						EntityInput: data.EntityInput{
+							SchemaName: schemaName,
+							AttributesToCreateOrUpdate: map[string]interface{}{
+								"firstName": "Harry",
+								"lastName":  "Potter",
+							},
 						},
 					},
 				},
 			},
-		}})
-	if err != nil {
-		panic(err)
+		},
+		{
+			Mutations: map[string][]data.Mutation{
+				schemaName: {
+					{
+						Type: data.UpdateEntityAttributesMutation,
+						EntityInput: data.EntityInput{
+							EntityID:   1,
+							SchemaName: schemaName,
+							AttributesToCreateOrUpdate: map[string]interface{}{
+								"lastName": "What",
+							},
+						},
+					},
+					{
+						Type: data.CreateEntityMutation,
+						EntityInput: data.EntityInput{
+							SchemaName: schemaName,
+							AttributesToCreateOrUpdate: map[string]interface{}{
+								"firstName": "Tony",
+								"lastName":  "Stark",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Mutations: map[string][]data.Mutation{
+				schemaName: {
+					{
+						Type: data.CreateEntityMutation,
+						EntityInput: data.EntityInput{
+							SchemaName: schemaName,
+							AttributesToCreateOrUpdate: map[string]interface{}{
+								"firstName": "Princess",
+								"lastName":  "Leia",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
-	<-time.After(time.Second)
-
-	var transactionID uint64
 	latestCommit, err := cl.GetLatestCommit(dbName)
 	if err != nil {
-		fmt.Println("use default commit")
-		transactionID = query.NoDataTransactionID
-	} else {
-		fmt.Printf("has latest commit: %v\n", latestCommit)
-		transactionID = latestCommit.CommittedTransactionID
+		panic(err)
 	}
 
-	qu := lang.Find(lang.EqualTo(lang.SchemaAttribute, "user"))
-	entities, err := cl.QueryEntities(dbName, transactionID, qu)
+	if latestCommit.CommittedTransactionID == 0 {
+		for _, transaction := range transactions {
+			err = cl.CreateTransaction(dbName, transaction)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		<-time.After(1 * time.Second)
+	}
+
+	latestCommit, err = cl.GetLatestCommit(dbName)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(entities)
+	fmt.Printf("has latest commit: %v\n", latestCommit)
+	transactionID := latestCommit.CommittedTransactionID
+
+	for currTransID := uint64(0); currTransID <= transactionID; currTransID++ {
+		fmt.Printf("Transaction ID: %v\n", currTransID)
+
+		qu := lang.Find(
+			lang.EqualTo(lang.SchemaAttribute, "user"),
+		)
+		entities, err := cl.QueryEntities(dbName, currTransID, qu)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(entities)
+		fmt.Println()
+	}
 }

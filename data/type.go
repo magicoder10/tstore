@@ -7,6 +7,7 @@ import (
 type Type string
 
 const (
+	NoneDataType     Type = "none"
 	IntDataType      Type = "int"
 	DecimalDataType  Type = "decimal"
 	BoolDataType     Type = "bool"
