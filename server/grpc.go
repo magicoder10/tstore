@@ -47,13 +47,13 @@ func (g GRPCServer) GetLatestCommit(ctx context.Context, request *proto.GetLates
 	return proto.ToProtoCommit(commit), nil
 }
 
-func (g GRPCServer) QueryEntities(ctx context.Context, request *proto.QueryEntitiesRequest) (*proto.Entities, error) {
+func (g GRPCServer) QueryEntitiesAtCommit(ctx context.Context, request *proto.QueryAtCommitRequest) (*proto.Entities, error) {
 	if request.Query == nil {
 		return nil, errors.New("query can't be nil")
 	}
 
 	query := proto.FromProtoExpression(request.Query)
-	entities, err := g.server.QueryEntities(request.DbName, request.TransactionId, *query)
+	entities, err := g.server.QueryEntitiesAtCommit(request.DbName, request.TransactionId, *query)
 	if err != nil {
 		return nil, err
 	}
@@ -61,13 +61,13 @@ func (g GRPCServer) QueryEntities(ctx context.Context, request *proto.QueryEntit
 	return proto.ToProtoEntities(entities), nil
 }
 
-func (g GRPCServer) QueryGroups(ctx context.Context, request *proto.QueryGroupsRequest) (*proto.Groups, error) {
+func (g GRPCServer) QueryGroupsAtCommit(ctx context.Context, request *proto.QueryAtCommitRequest) (*proto.Groups, error) {
 	if request.Query == nil {
 		return nil, errors.New("query can't be nil")
 	}
 
 	query := proto.FromProtoExpression(request.Query)
-	groups, err := g.server.QueryEntityGroups(request.DbName, request.TransactionId, *query)
+	groups, err := g.server.QueryEntityGroupsAtCommit(request.DbName, request.TransactionId, *query)
 	if err != nil {
 		return nil, err
 	}

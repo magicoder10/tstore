@@ -2,6 +2,7 @@ package database
 
 import (
 	"tstore/data"
+	"tstore/history"
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
@@ -18,12 +19,19 @@ func (d Database) CreateTransaction(transactionInput mutation.TransactionInput) 
 	return d.mutator.CreateTransaction(transactionInput)
 }
 
-func (d Database) QueryEntities(commitID uint64, query lang.Expression) ([]data.Entity, error) {
-	return d.queryExecutor.QueryEntities(commitID, query)
+func (d Database) QueryEntitiesAtCommit(commitID uint64, query lang.Expression) ([]data.Entity, error) {
+	return d.queryExecutor.QueryEntitiesAtCommit(commitID, query)
 }
 
-func (d Database) QueryEntityGroups(commitID uint64, query lang.Expression) (query.Groups, error) {
-	return d.queryExecutor.QueryEntityGroups(commitID, query)
+func (d Database) QueryEntityGroupsAtCommit(commitID uint64, query lang.Expression) (query.Groups[data.Entity], error) {
+	return d.queryExecutor.QueryEntityGroupsAtCommit(commitID, query)
+}
+
+func (d Database) QueryEntitiesBetweenCommits(
+	beginCommitID uint64,
+	endCommitID uint64,
+	query lang.Expression) (map[uint64][]history.Version[data.Entity], error) {
+	return d.queryExecutor.QueryEntitiesBetweenCommits(beginCommitID, endCommitID, query)
 }
 
 func (d Database) GetLatestCommit() (data.Commit, error) {

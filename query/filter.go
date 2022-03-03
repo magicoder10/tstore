@@ -3,72 +3,71 @@ package query
 import (
 	"strings"
 
-	"tstore/data"
 	"tstore/types"
 )
 
-type Filter func(entity data.Entity) bool
+type Filter[Item any] func(item Item) bool
 
 // Logical filters
 
-func And(filter1 Filter, filter2 Filter) Filter {
-	return func(entity data.Entity) bool {
-		return filter1(entity) && filter2(entity)
+func And[Item any](filter1 Filter[Item], filter2 Filter[Item]) Filter[Item] {
+	return func(item Item) bool {
+		return filter1(item) && filter2(item)
 	}
 }
 
-func Or(filter1 Filter, filter2 Filter) Filter {
-	return func(entity data.Entity) bool {
-		return filter1(entity) || filter2(entity)
+func Or[Item any](filter1 Filter[Item], filter2 Filter[Item]) Filter[Item] {
+	return func(item Item) bool {
+		return filter1(item) || filter2(item)
 	}
 }
 
-func Not(filter Filter) Filter {
-	return func(entity data.Entity) bool {
-		return !filter(entity)
+func Not[Item any](filter Filter[Item]) Filter[Item] {
+	return func(item Item) bool {
+		return !filter(item)
 	}
 }
 
 // Comparison filters
 
-var All Filter = func(entity data.Entity) bool {
+func All[Item any](item Item) bool {
 	return true
 }
 
-type Selector func(entity data.Entity) interface{}
+type Selector[Item any] func(item Item) interface{}
 
-func EqualTo[Value types.Equatable](selector Selector, target Value) Filter {
-	return func(entity data.Entity) bool {
-		return selector(entity).(Value) == target
+func EqualTo[Item any, Value types.Equatable](selector Selector[Item], target Value) Filter[Item] {
+	return func(item Item) bool {
+		return selector(item).(Value) == target
 	}
 }
 
-func Contains(selector Selector, target string) Filter {
-	return func(entity data.Entity) bool {
-		return strings.Contains(selector(entity).(string), target)
+func Contains[Item any](selector Selector[Item], target string) Filter[Item] {
+	return func(item Item) bool {
+		return strings.Contains(selector(item).(string), target)
 	}
 }
 
-func GreaterThan[Value types.Comparable](selector Selector, target Value) Filter {
-	return func(entity data.Entity) bool {
-		return selector(entity).(Value) > target
+func GreaterThan[Item any, Value types.Comparable](selector Selector[Item], target Value) Filter[Item] {
+	return func(item Item) bool {
+		return selector(item).(Value) > target
 	}
 }
 
-func GreaterThanOrEqualTo[Value types.Comparable](selector Selector, target Value) Filter {
-	return func(entity data.Entity) bool {
-		return selector(entity).(Value) >= target
+func GreaterThanOrEqualTo[Item any, Value types.Comparable](selector Selector[Item], target Value) Filter[Item] {
+	return func(item Item) bool {
+		return selector(item).(Value) >= target
 	}
 }
 
-func LessThan[Value types.Comparable](selector Selector, target Value) Filter {
-	return func(entity data.Entity) bool {
-		return selector(entity).(Value) < target
+func LessThan[Item any, Value types.Comparable](selector Selector[Item], target Value) Filter[Item] {
+	return func(item Item) bool {
+		return selector(item).(Value) < target
 	}
 }
 
-func LessThanOrEqualTo[Value types.Comparable](selector Selector, target Value) Filter {
-	return func(entity data.Entity) bool {
-		return selector(entity).(Value) <= target
+func LessThanOrEqualTo[Item any, Value types.Comparable](selector Selector[Item], target Value) Filter[Item] {
+	return func(item Item) bool {
+		return selector(item).(Value) <= target
 	}
 }

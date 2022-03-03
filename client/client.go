@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"google.golang.org/protobuf/types/known/emptypb"
 	"tstore/data"
 	"tstore/mutation"
 	"tstore/proto"
@@ -37,6 +38,16 @@ func (c *Client) CreateDatabase(name string) error {
 	return err
 }
 
+func (c *Client) ListDatabases() ([]string, error) {
+	ctx := context.Background()
+	databases, err := c.databaseClient.ListAllDatabases(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+
+	return databases.Databases, nil
+}
+
 func (c *Client) DeleteDatabase(name string) error {
 	ctx := context.Background()
 	_, err := c.databaseClient.DeleteDatabase(ctx, &proto.DeleteDatabaseRequest{Name: name})
@@ -66,7 +77,7 @@ func (c *Client) GetLatestCommit(dbName string) (data.Commit, error) {
 func (c *Client) QueryEntities(dbName string, transactionID uint64, collector lang.Collector) ([]data.Entity, error) {
 	protoExpression := proto.ToProtoExpression(lang.Expression(collector))
 	ctx := context.Background()
-	entities, err := c.databaseClient.QueryEntities(ctx, &proto.QueryEntitiesRequest{
+	entities, err := c.databaseClient.QueryEntitiesAtCommit(ctx, &proto.QueryAtCommitRequest{
 		DbName:        dbName,
 		TransactionId: transactionID,
 		Query:         protoExpression,
@@ -78,10 +89,10 @@ func (c *Client) QueryEntities(dbName string, transactionID uint64, collector la
 	return proto.FromProtoEntities(entities)
 }
 
-func (c *Client) QueryGroups(dbName string, transactionID uint64, collector lang.GroupCollector) (query.Groups, error) {
+func (c *Client) QueryEntityGroups(dbName string, transactionID uint64, collector lang.GroupCollector) (query.Groups[data.Entity], error) {
 	protoExpression := proto.ToProtoExpression(lang.Expression(collector))
 	ctx := context.Background()
-	groups, err := c.databaseClient.QueryGroups(ctx, &proto.QueryGroupsRequest{
+	groups, err := c.databaseClient.QueryEntityGroupsAtCommit(ctx, &proto.QueryAtCommitRequest{
 		DbName:        dbName,
 		TransactionId: transactionID,
 		Query:         protoExpression,

@@ -13,8 +13,10 @@ service Database {
   rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
   rpc CreateTransaction(CreateTransactionRequest) returns (google.protobuf.Empty);
   rpc GetLatestCommit(GetLatestCommitRequest) returns (Commit);
-  rpc QueryEntities(QueryEntitiesRequest) returns (Entities);
-  rpc QueryGroups(QueryGroupsRequest) returns (Groups);
+  rpc QueryEntitiesAtCommit(QueryAtCommitRequest) returns (Entities);
+  rpc QueryEntityGroupsAtCommit(QueryAtCommitRequest) returns (Groups);
+  rpc QueryEntitiesBetweenCommits(QueryBetweenCommitsRequest) returns (Entities);
+  rpc QueryEntityGroupsBetweenCommits(QueryBetweenCommitsRequest) returns (Entities);
 }
 
 message CreateDatabaseRequest {
@@ -34,16 +36,17 @@ message GetLatestCommitRequest {
   string dbName = 1;
 }
 
-message QueryEntitiesRequest {
+message QueryAtCommitRequest {
   string dbName = 1;
   uint64 transactionId = 2;
   Expression query = 3;
 }
 
-message QueryGroupsRequest {
+message QueryBetweenCommitsRequest {
   string dbName = 1;
-  uint64 transactionId = 2;
-  Expression query = 3;
+  uint64 beginTransactionId = 2;
+  uint64 endTransactionId = 3;
+  Expression query = 4;
 }
 
 // core entities
@@ -124,7 +127,7 @@ message Groups {
 }
 
 message Databases {
-  repeated string database = 1;
+  repeated string databases = 1;
 }
 
 enum Operator {

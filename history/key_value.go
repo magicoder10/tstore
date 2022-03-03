@@ -49,6 +49,19 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindChangesBetween(
 	return history.ChangesBetween(beginCommitID, endCommitID)
 }
 
+func (k KeyValue[CommitID, Key, Value, Change]) FindAllChangesBetween(
+	beginCommitID CommitID,
+	endCommitID CommitID,
+) map[Key][]Version[Value] {
+	values := make(map[Key][]Version[Value])
+	for key, history := range k.Histories {
+		versions := history.ChangesBetween(beginCommitID, endCommitID)
+		values[key] = versions
+	}
+
+	return values
+}
+
 func (k KeyValue[CommitID, Key, Value, Change]) AddNewVersion(
 	commitID CommitID,
 	key Key,
