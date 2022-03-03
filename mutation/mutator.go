@@ -41,9 +41,7 @@ func (m *Mutator) Start() {
 			err := m.commitTransaction(transaction)
 			if err != nil {
 				fmt.Printf("fail to commit transaction: transaction=%v error=%v\n", transaction.ID, err)
-				if err = m.rollbackTransaction(transaction.ID); err != nil {
-					fmt.Printf("fail to undo transaction: transaction=%v\n", transaction)
-				}
+				m.rollbackTransaction(transaction.ID)
 			}
 
 			go func(transaction Transaction) {
@@ -85,21 +83,12 @@ func (m *Mutator) commitTransaction(transaction Transaction) error {
 		CommittedTransactionID: transaction.ID,
 		CommittedAt:            time.Now(),
 	}
-	err = m.dataStorage.AppendCommit(commit)
-	if err != nil {
-		return err
-	}
-
-	return m.transactionStorage.WriteTransactionLog(TransactionCommittedLogLine{
-		TransactionID: transaction.ID,
-	})
+	return m.dataStorage.AppendCommit(commit)
 }
 
-func (m *Mutator) rollbackTransaction(transactionID uint64) error {
-	// TODO: rollback transaction
-	return m.transactionStorage.WriteTransactionLog(TransactionAbortedLogLine{
-		TransactionID: transactionID,
-	})
+func (m *Mutator) rollbackTransaction(transactionID uint64) {
+	m.dataStorage.EntityHistories.RemoveVersion(transactionID)
+	m.dataStorage.SchemaHistories.RemoveVersion(transactionID)
 }
 
 func (m *Mutator) commitMutation(transactionID uint64, mutation data.Mutation) error {
@@ -133,34 +122,13 @@ func (m *Mutator) commitCreateSchemaMutation(transactionID uint64, mutation data
 		return fmt.Errorf("schema already exist: name=%v", schemaName)
 	}
 
-	err := m.transactionStorage.WriteTransactionLog(TransactionCreateSchemaLogLine{
-		TransactionID: transactionID,
-		MutationType:  mutation.Type,
-		SchemaName:    schemaName,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.SchemaHistories.AddNewVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
+	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
 	return nil
 }
 
 func (m *Mutator) commitDeleteSchemaMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	schema, _ := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
-
-	err := m.transactionStorage.WriteTransactionLog(TransactionDeleteSchemaLogLine{
-		TransactionID:  transactionID,
-		MutationType:   mutation.Type,
-		SchemaName:     schemaName,
-		PrevAttributes: schema.Attributes,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.SchemaHistories.AddNewVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
+	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
 	return nil
 }
 
@@ -175,17 +143,7 @@ func (m *Mutator) commitCreateSchemaAttributeMutation(transactionID uint64, muta
 		}
 	}
 
-	err := m.transactionStorage.WriteTransactionLog(TransactionCreateSchemaAttributesLogLine{
-		TransactionID:     transactionID,
-		MutationType:      mutation.Type,
-		SchemaName:        schemaName,
-		CreatedAttributes: getMapKeys(mutation.SchemaInput.AttributesToCreateOrUpdate),
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.SchemaHistories.AddNewVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
 	return nil
 }
 
@@ -204,24 +162,15 @@ func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mut
 
 		attributes[attribute] = currSchema.Attributes[attribute]
 	}
-	err := m.transactionStorage.WriteTransactionLog(TransactionDeleteSchemaAttributesLogLine{
-		TransactionID:  transactionID,
-		MutationType:   mutation.Type,
-		SchemaName:     schemaName,
-		PrevAttributes: attributes,
-	})
-	if err != nil {
-		return err
-	}
 
-	m.dataStorage.SchemaHistories.AddNewVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
 	entities := m.dataStorage.EntityHistories.ListAllLatestValuesAt(transactionID)
 	for entityID, entity := range entities {
 		if entity.SchemaName != schemaName {
 			continue
 		}
 
-		err = m.commitDeleteEntityAttributesMutation(transactionID, data.Mutation{
+		err := m.commitDeleteEntityAttributesMutation(transactionID, data.Mutation{
 			Type: data.DeleteEntityAttributesMutation,
 			EntityInput: data.EntityInput{
 				EntityID:           entityID,
@@ -256,37 +205,17 @@ func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.
 
 	entityID := m.entityIDGen.NextID()
 	mutation.EntityInput.EntityID = entityID
-	err = m.transactionStorage.WriteTransactionLog(TransactionCreateEntityLogLine{
-		TransactionID: transactionID,
-		MutationType:  mutation.Type,
-		EntityID:      entityID,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.EntityHistories.AddNewVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
+	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
 	return nil
 }
 
 func (m Mutator) commitDeleteEntityMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	_, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
 	if !ok {
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
-
-	err := m.transactionStorage.WriteTransactionLog(TransactionDeleteEntityLogLine{
-		TransactionID:  transactionID,
-		MutationType:   mutation.Type,
-		EntityID:       entityID,
-		PrevAttributes: entity.Attributes,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.EntityHistories.AddNewVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
+	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
 	return nil
 }
 
@@ -316,17 +245,7 @@ func (m Mutator) commitCreateEntityAttributesMutation(transactionID uint64, muta
 		attributes[attribute] = value
 	}
 
-	err := m.transactionStorage.WriteTransactionLog(TransactionCreateEntityAttributesLogLine{
-		TransactionID:     transactionID,
-		MutationType:      mutation.Type,
-		EntityID:          entityID,
-		CreatedAttributes: getMapKeys(mutation.EntityInput.AttributesToCreateOrUpdate),
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.EntityHistories.AddNewVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
 	return nil
 }
 
@@ -346,17 +265,7 @@ func (m Mutator) commitDeleteEntityAttributesMutation(transactionID uint64, muta
 		attributes[attribute] = entity.Attributes[attribute]
 	}
 
-	err := m.transactionStorage.WriteTransactionLog(TransactionDeleteEntityAttributesLogLine{
-		TransactionID:  transactionID,
-		MutationType:   mutation.Type,
-		EntityID:       entityID,
-		PrevAttributes: attributes,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.EntityHistories.AddNewVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
 	return nil
 }
 
@@ -386,17 +295,7 @@ func (m Mutator) commitUpdateEntityAttributesMutation(transactionID uint64, muta
 		attributes[attribute] = value
 	}
 
-	err := m.transactionStorage.WriteTransactionLog(TransactionUpdateEntityAttributesLogLine{
-		TransactionID:  transactionID,
-		MutationType:   mutation.Type,
-		EntityID:       entityID,
-		PrevAttributes: attributes,
-	})
-	if err != nil {
-		return err
-	}
-
-	m.dataStorage.EntityHistories.AddNewVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
 	return nil
 }
 
