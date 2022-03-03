@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"io"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"tstore/data"
 	"tstore/mutation"
 	"tstore/proto"
 	"tstore/query"
 	"tstore/query/lang"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Endpoint struct {
