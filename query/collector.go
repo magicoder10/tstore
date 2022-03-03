@@ -2,18 +2,16 @@ package query
 
 import (
 	"fmt"
-
-	"tstore/data"
 )
 
-type Collector = func(entities []data.Entity) []data.Entity
+type Collector[Item any] func(items []Item) []Item
 
-func Find(filter Filter) Collector {
-	return func(entities []data.Entity) []data.Entity {
-		found := make([]data.Entity, 0)
-		for _, entity := range entities {
-			if filter(entity) {
-				found = append(found, entity)
+func Find[Item any](filter Filter[Item]) Collector[Item] {
+	return func(items []Item) []Item {
+		found := make([]Item, 0)
+		for _, item := range items {
+			if filter(item) {
+				found = append(found, item)
 			}
 		}
 
@@ -21,52 +19,52 @@ func Find(filter Filter) Collector {
 	}
 }
 
-func Take(collector Collector, topCount int) Collector {
-	return func(input []data.Entity) []data.Entity {
-		collected := collector(input)
+func Take[Item any](collector Collector[Item], topCount int) Collector[Item] {
+	return func(items []Item) []Item {
+		collected := collector(items)
 		return collected[:topCount]
 	}
 }
 
 // Sort
 
-func Asc(collector Collector, selector Selector) Collector {
-	return func(input []data.Entity) []data.Entity {
+func Asc[Item any](collector Collector[Item], selector Selector[Item]) Collector[Item] {
+	return func(items []Item) []Item {
 		// TODO: implement me
-		return input
+		return items
 	}
 }
 
-func Desc(collector Collector, selector Selector) Collector {
-	return func(input []data.Entity) []data.Entity {
+func Desc[Item any](collector Collector[Item], selector Selector[Item]) Collector[Item] {
+	return func(items []Item) []Item {
 		// TODO: implement me
-		return input
+		return items
 	}
 }
 
 // Group collector
 
-type GroupCollector func(input []data.Entity) Groups
+type GroupCollector[Item any] func(items []Item) Groups[Item]
 
-func GroupBy(collector Collector, selector Selector) GroupCollector {
-	return func(input []data.Entity) Groups {
-		collected := collector(input)
-		groups := make(Groups)
-		for _, entity := range collected {
-			key := fmt.Sprintf("%v", selector(entity))
-			groups[key] = append(groups[key], entity)
+func GroupBy[Item any](collector Collector[Item], selector Selector[Item]) GroupCollector[Item] {
+	return func(items []Item) Groups[Item] {
+		collected := collector(items)
+		groups := make(Groups[Item])
+		for _, item := range collected {
+			key := fmt.Sprintf("%v", selector(item))
+			groups[key] = append(([]Item)(groups[key]), item)
 		}
 
 		return groups
 	}
 }
 
-func EachGroup(groupCollector GroupCollector, collector Collector) GroupCollector {
-	return func(input []data.Entity) Groups {
-		collected := groupCollector(input)
-		newGroups := make(Groups)
-		for value, entities := range collected {
-			newGroups[value] = collector(entities)
+func EachGroup[Item any](groupCollector GroupCollector[Item], collector Collector[Item]) GroupCollector[Item] {
+	return func(items []Item) Groups[Item] {
+		collected := groupCollector(items)
+		newGroups := make(Groups[Item])
+		for value, entries := range collected {
+			newGroups[value] = collector(entries)
 		}
 
 		return newGroups

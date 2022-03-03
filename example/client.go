@@ -23,6 +23,13 @@ func main() {
 	dbName := "example"
 	cl.CreateDatabase(dbName)
 
+	databases, err := cl.ListDatabases()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Databases: %v\n", databases)
+
 	schemaName := "user"
 	transactions := []mutation.TransactionInput{
 		{

@@ -5,6 +5,7 @@ import (
 
 	"tstore/data"
 	"tstore/database"
+	"tstore/history"
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
@@ -61,22 +62,39 @@ func (s Server) CreateTransaction(dbName string, transactionInput mutation.Trans
 	return db.CreateTransaction(transactionInput)
 }
 
-func (s Server) QueryEntities(dbName string, transactionID uint64, query lang.Expression) ([]data.Entity, error) {
+func (s Server) QueryEntitiesAtCommit(dbName string, transactionID uint64, query lang.Expression) ([]data.Entity, error) {
 	db, ok := s.databases[dbName]
 	if !ok {
 		return nil, fmt.Errorf("database not found: name=%v", dbName)
 	}
 
-	return db.QueryEntities(transactionID, query)
+	return db.QueryEntitiesAtCommit(transactionID, query)
 }
 
-func (s Server) QueryEntityGroups(dbName string, transactionID uint64, query lang.Expression) (query.Groups, error) {
+func (s Server) QueryEntityGroupsAtCommit(
+	dbName string,
+	transactionID uint64,
+	query lang.Expression,
+) (query.Groups[data.Entity], error) {
 	db, ok := s.databases[dbName]
 	if !ok {
 		return nil, fmt.Errorf("database not found: name=%v", dbName)
 	}
 
-	return db.QueryEntityGroups(transactionID, query)
+	return db.QueryEntityGroupsAtCommit(transactionID, query)
+}
+
+func (s Server) QueryEntitiesBetweenCommits(
+	dbName string,
+	beginCommitID uint64,
+	endCommitID uint64,
+	query lang.Expression) (map[uint64][]history.Version[data.Entity], error) {
+	db, ok := s.databases[dbName]
+	if !ok {
+		return nil, fmt.Errorf("database not found: name=%v", dbName)
+	}
+
+	return db.QueryEntitiesBetweenCommits(beginCommitID, endCommitID, query)
 }
 
 func (s Server) GetLatestCommit(dbName string) (data.Commit, error) {

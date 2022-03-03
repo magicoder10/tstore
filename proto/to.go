@@ -49,7 +49,7 @@ var toProtoOperator = map[lang.Operator]Operator{
 }
 
 func ToProtoDatabases(dbNames []string) *Databases {
-	return &Databases{Database: dbNames}
+	return &Databases{Databases: dbNames}
 }
 
 func ToProtoTransaction(transactionInput mutation.TransactionInput) *Transaction {

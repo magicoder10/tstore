@@ -1,7 +1,3 @@
 package query
 
-import (
-	"tstore/data"
-)
-
-type Groups map[string][]data.Entity
+type Groups[Item any] map[string][]Item

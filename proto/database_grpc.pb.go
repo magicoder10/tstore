@@ -28,8 +28,10 @@ type DatabaseClient interface {
 	DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CreateTransaction(ctx context.Context, in *CreateTransactionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetLatestCommit(ctx context.Context, in *GetLatestCommitRequest, opts ...grpc.CallOption) (*Commit, error)
-	QueryEntities(ctx context.Context, in *QueryEntitiesRequest, opts ...grpc.CallOption) (*Entities, error)
-	QueryGroups(ctx context.Context, in *QueryGroupsRequest, opts ...grpc.CallOption) (*Groups, error)
+	QueryEntitiesAtCommit(ctx context.Context, in *QueryAtCommitRequest, opts ...grpc.CallOption) (*Entities, error)
+	QueryEntityGroupsAtCommit(ctx context.Context, in *QueryAtCommitRequest, opts ...grpc.CallOption) (*Groups, error)
+	QueryEntitiesBetweenCommits(ctx context.Context, in *QueryBetweenCommitsRequest, opts ...grpc.CallOption) (*Entities, error)
+	QueryEntityGroupsBetweenCommits(ctx context.Context, in *QueryBetweenCommitsRequest, opts ...grpc.CallOption) (*Entities, error)
 }
 
 type databaseClient struct {
@@ -85,18 +87,36 @@ func (c *databaseClient) GetLatestCommit(ctx context.Context, in *GetLatestCommi
 	return out, nil
 }
 
-func (c *databaseClient) QueryEntities(ctx context.Context, in *QueryEntitiesRequest, opts ...grpc.CallOption) (*Entities, error) {
+func (c *databaseClient) QueryEntitiesAtCommit(ctx context.Context, in *QueryAtCommitRequest, opts ...grpc.CallOption) (*Entities, error) {
 	out := new(Entities)
-	err := c.cc.Invoke(ctx, "/proto.Database/QueryEntities", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.Database/QueryEntitiesAtCommit", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *databaseClient) QueryGroups(ctx context.Context, in *QueryGroupsRequest, opts ...grpc.CallOption) (*Groups, error) {
+func (c *databaseClient) QueryEntityGroupsAtCommit(ctx context.Context, in *QueryAtCommitRequest, opts ...grpc.CallOption) (*Groups, error) {
 	out := new(Groups)
-	err := c.cc.Invoke(ctx, "/proto.Database/QueryGroups", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.Database/QueryEntityGroupsAtCommit", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *databaseClient) QueryEntitiesBetweenCommits(ctx context.Context, in *QueryBetweenCommitsRequest, opts ...grpc.CallOption) (*Entities, error) {
+	out := new(Entities)
+	err := c.cc.Invoke(ctx, "/proto.Database/QueryEntitiesBetweenCommits", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *databaseClient) QueryEntityGroupsBetweenCommits(ctx context.Context, in *QueryBetweenCommitsRequest, opts ...grpc.CallOption) (*Entities, error) {
+	out := new(Entities)
+	err := c.cc.Invoke(ctx, "/proto.Database/QueryEntityGroupsBetweenCommits", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +132,10 @@ type DatabaseServer interface {
 	DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*emptypb.Empty, error)
 	CreateTransaction(context.Context, *CreateTransactionRequest) (*emptypb.Empty, error)
 	GetLatestCommit(context.Context, *GetLatestCommitRequest) (*Commit, error)
-	QueryEntities(context.Context, *QueryEntitiesRequest) (*Entities, error)
-	QueryGroups(context.Context, *QueryGroupsRequest) (*Groups, error)
+	QueryEntitiesAtCommit(context.Context, *QueryAtCommitRequest) (*Entities, error)
+	QueryEntityGroupsAtCommit(context.Context, *QueryAtCommitRequest) (*Groups, error)
+	QueryEntitiesBetweenCommits(context.Context, *QueryBetweenCommitsRequest) (*Entities, error)
+	QueryEntityGroupsBetweenCommits(context.Context, *QueryBetweenCommitsRequest) (*Entities, error)
 	mustEmbedUnimplementedDatabaseServer()
 }
 
@@ -136,11 +158,17 @@ func (UnimplementedDatabaseServer) CreateTransaction(context.Context, *CreateTra
 func (UnimplementedDatabaseServer) GetLatestCommit(context.Context, *GetLatestCommitRequest) (*Commit, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLatestCommit not implemented")
 }
-func (UnimplementedDatabaseServer) QueryEntities(context.Context, *QueryEntitiesRequest) (*Entities, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryEntities not implemented")
+func (UnimplementedDatabaseServer) QueryEntitiesAtCommit(context.Context, *QueryAtCommitRequest) (*Entities, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryEntitiesAtCommit not implemented")
 }
-func (UnimplementedDatabaseServer) QueryGroups(context.Context, *QueryGroupsRequest) (*Groups, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryGroups not implemented")
+func (UnimplementedDatabaseServer) QueryEntityGroupsAtCommit(context.Context, *QueryAtCommitRequest) (*Groups, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryEntityGroupsAtCommit not implemented")
+}
+func (UnimplementedDatabaseServer) QueryEntitiesBetweenCommits(context.Context, *QueryBetweenCommitsRequest) (*Entities, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryEntitiesBetweenCommits not implemented")
+}
+func (UnimplementedDatabaseServer) QueryEntityGroupsBetweenCommits(context.Context, *QueryBetweenCommitsRequest) (*Entities, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryEntityGroupsBetweenCommits not implemented")
 }
 func (UnimplementedDatabaseServer) mustEmbedUnimplementedDatabaseServer() {}
 
@@ -245,38 +273,74 @@ func _Database_GetLatestCommit_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Database_QueryEntities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryEntitiesRequest)
+func _Database_QueryEntitiesAtCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAtCommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DatabaseServer).QueryEntities(ctx, in)
+		return srv.(DatabaseServer).QueryEntitiesAtCommit(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.Database/QueryEntities",
+		FullMethod: "/proto.Database/QueryEntitiesAtCommit",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DatabaseServer).QueryEntities(ctx, req.(*QueryEntitiesRequest))
+		return srv.(DatabaseServer).QueryEntitiesAtCommit(ctx, req.(*QueryAtCommitRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Database_QueryGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryGroupsRequest)
+func _Database_QueryEntityGroupsAtCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAtCommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DatabaseServer).QueryGroups(ctx, in)
+		return srv.(DatabaseServer).QueryEntityGroupsAtCommit(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.Database/QueryGroups",
+		FullMethod: "/proto.Database/QueryEntityGroupsAtCommit",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DatabaseServer).QueryGroups(ctx, req.(*QueryGroupsRequest))
+		return srv.(DatabaseServer).QueryEntityGroupsAtCommit(ctx, req.(*QueryAtCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Database_QueryEntitiesBetweenCommits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryBetweenCommitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DatabaseServer).QueryEntitiesBetweenCommits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Database/QueryEntitiesBetweenCommits",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DatabaseServer).QueryEntitiesBetweenCommits(ctx, req.(*QueryBetweenCommitsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Database_QueryEntityGroupsBetweenCommits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryBetweenCommitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DatabaseServer).QueryEntityGroupsBetweenCommits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.Database/QueryEntityGroupsBetweenCommits",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DatabaseServer).QueryEntityGroupsBetweenCommits(ctx, req.(*QueryBetweenCommitsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -309,12 +373,20 @@ var Database_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Database_GetLatestCommit_Handler,
 		},
 		{
-			MethodName: "QueryEntities",
-			Handler:    _Database_QueryEntities_Handler,
+			MethodName: "QueryEntitiesAtCommit",
+			Handler:    _Database_QueryEntitiesAtCommit_Handler,
 		},
 		{
-			MethodName: "QueryGroups",
-			Handler:    _Database_QueryGroups_Handler,
+			MethodName: "QueryEntityGroupsAtCommit",
+			Handler:    _Database_QueryEntityGroupsAtCommit_Handler,
+		},
+		{
+			MethodName: "QueryEntitiesBetweenCommits",
+			Handler:    _Database_QueryEntitiesBetweenCommits_Handler,
+		},
+		{
+			MethodName: "QueryEntityGroupsBetweenCommits",
+			Handler:    _Database_QueryEntityGroupsBetweenCommits_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

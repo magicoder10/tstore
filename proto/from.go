@@ -109,8 +109,8 @@ func FromProtoEntities(protoEntities *Entities) ([]data.Entity, error) {
 	return entities, nil
 }
 
-func FromProtoGroups(protoGroups *Groups) (query.Groups, error) {
-	groups := make(query.Groups)
+func FromProtoGroups(protoGroups *Groups) (query.Groups[data.Entity], error) {
+	groups := make(query.Groups[data.Entity])
 	for key, protoEntities := range protoGroups.Groups {
 		entities, err := FromProtoEntities(protoEntities)
 		if err != nil {
