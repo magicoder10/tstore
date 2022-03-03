@@ -59,8 +59,7 @@ func (s SchemaValueHistory) AddVersion(commitID uint64, mutation Mutation) bool 
 }
 
 func (s SchemaValueHistory) RemoveVersion(commitID uint64) bool {
-	return s.nameHistory.RemoveVersion(commitID) ||
-		s.attributeHistory.RemoveVersion(commitID)
+	return s.nameHistory.RemoveVersion(commitID) || s.attributeHistory.RemoveVersion(commitID)
 }
 
 func newSchemaValueHistory() SchemaValueHistory {

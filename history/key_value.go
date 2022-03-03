@@ -83,13 +83,14 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 }
 
 func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID) bool {
+	var hasDeletion bool
 	for _, hist := range k.Histories {
 		if hist.RemoveVersion(commitID) {
-			return true
+			hasDeletion = true
 		}
 	}
 
-	return false
+	return hasDeletion
 }
 
 func NewKeyValue[
