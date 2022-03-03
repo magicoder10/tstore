@@ -54,7 +54,7 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 	return versions
 }
 
-func (h *History[CommitID, Value, Change]) AddNewVersion(
+func (h *History[CommitID, Value, Change]) AddVersion(
 	commitID CommitID,
 	versionStatus VersionStatus,
 	change Change,
@@ -65,12 +65,24 @@ func (h *History[CommitID, Value, Change]) AddNewVersion(
 	}
 
 	if versionStatus != DeletedVersionStatus {
-		h.ValueHistory.AddNewVersion(commitID, change)
+		h.ValueHistory.AddVersion(commitID, change)
 	}
 
 	h.CommitHistory = append(([]CommitID)(h.CommitHistory), commitID)
 	h.CommitMap[commitID] = versionStatus
 
+	return true
+}
+
+func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) bool {
+	_, ok := h.CommitMap[commitID]
+	if ok {
+		return false
+	}
+
+	h.ValueHistory.RemoveVersion(commitID)
+	h.CommitHistory = h.CommitHistory[:len(([]CommitID)(h.CommitHistory))-1]
+	delete(h.CommitMap, commitID)
 	return true
 }
 

@@ -35,38 +35,44 @@ func (e EntityValueHistory) Value(commitID uint64) Entity {
 	}
 }
 
-func (e EntityValueHistory) AddNewVersion(commitID uint64, mutation Mutation) bool {
+func (e EntityValueHistory) AddVersion(commitID uint64, mutation Mutation) bool {
 	switch mutation.Type {
 	case CreateEntityMutation:
-		e.idHistory.AddNewVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.EntityID)
-		e.schemaNameHistory.AddNewVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.SchemaName)
+		e.idHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.EntityID)
+		e.schemaNameHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.SchemaName)
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddNewVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			e.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
 		}
 	case DeleteEntityMutation:
-		e.idHistory.AddNewVersion(commitID, history.DeletedVersionStatus, 0)
-		e.schemaNameHistory.AddNewVersion(commitID, history.DeletedVersionStatus, "")
+		e.idHistory.AddVersion(commitID, history.DeletedVersionStatus, 0)
+		e.schemaNameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
 		attributes := e.attributeHistory.ListAllLatestValuesAt(commitID)
 		for attribute := range attributes {
-			e.attributeHistory.AddNewVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			e.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
 		}
 	case CreateEntityAttributesMutation:
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddNewVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			e.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
 		}
 	case DeleteEntityAttributesMutation:
 		for _, attribute := range mutation.EntityInput.AttributesToDelete {
-			e.attributeHistory.AddNewVersion(commitID, attribute, history.DeletedVersionStatus, "")
+			e.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, "")
 		}
 	case UpdateEntityAttributesMutation:
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddNewVersion(commitID, attribute, history.UpdatedVersionStatus, dataType)
+			e.attributeHistory.AddVersion(commitID, attribute, history.UpdatedVersionStatus, dataType)
 		}
 	default:
 		return false
 	}
 
 	return true
+}
+
+func (e EntityValueHistory) RemoveVersion(commitID uint64) bool {
+	return e.idHistory.RemoveVersion(commitID) ||
+		e.schemaNameHistory.RemoveVersion(commitID) ||
+		e.attributeHistory.RemoveVersion(commitID)
 }
 
 func newEntityValueHistory() EntityValueHistory {

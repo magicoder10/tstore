@@ -62,7 +62,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindAllChangesBetween(
 	return values
 }
 
-func (k KeyValue[CommitID, Key, Value, Change]) AddNewVersion(
+func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 	commitID CommitID,
 	key Key,
 	versionStatus VersionStatus,
@@ -73,13 +73,23 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddNewVersion(
 		history = New(k.createValueHistory())
 	}
 
-	succeed := history.AddNewVersion(commitID, versionStatus, change)
+	succeed := history.AddVersion(commitID, versionStatus, change)
 	if !succeed {
 		return false
 	}
 
 	k.Histories[key] = history
 	return true
+}
+
+func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID) bool {
+	for _, hist := range k.Histories {
+		if hist.RemoveVersion(commitID) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func NewKeyValue[

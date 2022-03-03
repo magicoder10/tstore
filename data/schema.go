@@ -30,32 +30,37 @@ func (s SchemaValueHistory) Value(commitID uint64) Schema {
 	}
 }
 
-func (s SchemaValueHistory) AddNewVersion(commitID uint64, mutation Mutation) bool {
+func (s SchemaValueHistory) AddVersion(commitID uint64, mutation Mutation) bool {
 	switch mutation.Type {
 	case CreateSchemaMutation:
-		s.nameHistory.AddNewVersion(commitID, history.CreatedVersionStatus, mutation.SchemaInput.Name)
+		s.nameHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.SchemaInput.Name)
 		for attribute, dataType := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-			s.attributeHistory.AddNewVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			s.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
 		}
 	case DeleteSchemaMutation:
-		s.nameHistory.AddNewVersion(commitID, history.DeletedVersionStatus, "")
+		s.nameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
 		attributes := s.attributeHistory.ListAllLatestValuesAt(commitID)
 		for attribute := range attributes {
-			s.attributeHistory.AddNewVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			s.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
 		}
 	case CreateSchemaAttributesMutation:
 		for attribute, dataType := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-			s.attributeHistory.AddNewVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			s.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
 		}
 	case DeleteSchemaAttributesMutation:
 		for _, attribute := range mutation.SchemaInput.AttributesToDelete {
-			s.attributeHistory.AddNewVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			s.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
 		}
 	default:
 		return false
 	}
 
 	return true
+}
+
+func (s SchemaValueHistory) RemoveVersion(commitID uint64) bool {
+	return s.nameHistory.RemoveVersion(commitID) ||
+		s.attributeHistory.RemoveVersion(commitID)
 }
 
 func newSchemaValueHistory() SchemaValueHistory {

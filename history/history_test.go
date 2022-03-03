@@ -8,10 +8,10 @@ import (
 
 func TestHistory(t *testing.T) {
 	valueHistory := New[uint64, string, string](NewSingleValueHistory[uint64, string]())
-	valueHistory.AddNewVersion(1, CreatedVersionStatus, "Harry")
-	valueHistory.AddNewVersion(2, UpdatedVersionStatus, "Cool")
-	valueHistory.AddNewVersion(3, DeletedVersionStatus, "")
-	valueHistory.AddNewVersion(4, CreatedVersionStatus, "New")
+	valueHistory.AddVersion(1, CreatedVersionStatus, "Harry")
+	valueHistory.AddVersion(2, UpdatedVersionStatus, "Cool")
+	valueHistory.AddVersion(3, DeletedVersionStatus, "")
+	valueHistory.AddVersion(4, CreatedVersionStatus, "New")
 
 	value1, ok1 := valueHistory.Value(1)
 	assert.True(t, ok1)
