@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	"tstore/data"
 	"tstore/history"
 	"tstore/types"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const bufferSize = 500
