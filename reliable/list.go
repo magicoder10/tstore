@@ -10,8 +10,6 @@ import (
 	"tstore/storage"
 )
 
-type Item[Item any] func(input string) (Item, error)
-
 type List[Item any] struct {
 	path   string
 	refGen idgen.IDGen
