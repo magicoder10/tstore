@@ -3,6 +3,7 @@ package reliable
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"path"
 	"strconv"
 
@@ -19,6 +20,7 @@ type List[Item any] struct {
 func (l *List[Item]) Append(item Item) error {
 	nodeRefPath, err := l.createNode()
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 

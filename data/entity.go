@@ -1,7 +1,11 @@
 package data
 
 import (
+	"log"
+	"path"
+
 	"tstore/history"
+	"tstore/storage"
 )
 
 type Entity struct {
@@ -22,67 +26,179 @@ type EntityInput struct {
 type EntityValueHistory struct {
 	idHistory         *history.History[uint64, uint64, uint64]
 	schemaNameHistory *history.History[uint64, string, string]
-	attributeHistory  history.KeyValue[uint64, string, interface{}, interface{}]
+	attributesHistory history.KeyValue[uint64, string, interface{}, interface{}]
 }
 
-func (e EntityValueHistory) Value(commitID uint64) Entity {
-	id, _ := e.idHistory.Value(commitID)
-	schemaName, _ := e.schemaNameHistory.Value(commitID)
-	return Entity{
-		ID:         id,
-		SchemaName: schemaName,
-		Attributes: e.attributeHistory.ListAllLatestValuesAt(commitID),
+func (e EntityValueHistory) Value(commitID uint64) (Entity, bool, error) {
+	entity := Entity{}
+	id, idExist, err := e.idHistory.Value(commitID)
+	if err != nil {
+		log.Println(err)
+		return Entity{}, false, err
 	}
+
+	if idExist {
+		entity.ID = id
+	}
+
+	schemaName, schemaNameExist, err := e.schemaNameHistory.Value(commitID)
+	if err != nil {
+		log.Println(err)
+		return Entity{}, false, err
+	}
+
+	if schemaNameExist {
+		entity.SchemaName = schemaName
+	}
+
+	attributes, attributesExist, err := e.attributesHistory.ListAllLatestValuesAt(commitID)
+	if err != nil {
+		log.Println(err)
+		return Entity{}, false, err
+	}
+
+	if attributesExist {
+		entity.Attributes = attributes
+	}
+
+	exist := idExist || schemaNameExist || attributesExist
+	return entity, exist, nil
 }
 
-func (e EntityValueHistory) AddVersion(commitID uint64, mutation Mutation) bool {
+func (e EntityValueHistory) AddVersion(commitID uint64, mutation Mutation) (bool, error) {
+	// TODO: return true when all AddVersion for a given mutation returns true
+	var updated bool
 	switch mutation.Type {
 	case CreateEntityMutation:
-		e.idHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.EntityID)
-		e.schemaNameHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.SchemaName)
+		idUpdated, err := e.idHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.EntityInput.EntityID)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || idUpdated
+
+		schemaNameUpdated, err := e.schemaNameHistory.AddVersion(
+			commitID, history.CreatedVersionStatus, mutation.EntityInput.SchemaName)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || schemaNameUpdated
+
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			attributeUpdated, err := e.attributesHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case DeleteEntityMutation:
-		e.idHistory.AddVersion(commitID, history.DeletedVersionStatus, 0)
-		e.schemaNameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
-		attributes := e.attributeHistory.ListAllLatestValuesAt(commitID)
+		idUpdated, err := e.idHistory.AddVersion(commitID, history.DeletedVersionStatus, 0)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || idUpdated
+
+		schemaNameUpdated, err := e.schemaNameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || schemaNameUpdated
+
+		attributes, _, err := e.attributesHistory.ListAllLatestValuesAt(commitID)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
 		for attribute := range attributes {
-			e.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			attributeUpdated, err := e.attributesHistory.AddVersion(
+				commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case CreateEntityAttributesMutation:
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			attributeUpdated, err := e.attributesHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case DeleteEntityAttributesMutation:
 		for _, attribute := range mutation.EntityInput.AttributesToDelete {
-			e.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, "")
+			attributeUpdated, err := e.attributesHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case UpdateEntityAttributesMutation:
 		for attribute, dataType := range mutation.EntityInput.AttributesToCreateOrUpdate {
-			e.attributeHistory.AddVersion(commitID, attribute, history.UpdatedVersionStatus, dataType)
+			attributeUpdated, err := e.attributesHistory.AddVersion(commitID, attribute, history.UpdatedVersionStatus, dataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	default:
-		return false
+		return false, nil
 	}
 
-	return true
+	return updated, nil
 }
 
-func (e EntityValueHistory) RemoveVersion(commitID uint64) bool {
-	return e.idHistory.RemoveVersion(commitID) ||
-		e.schemaNameHistory.RemoveVersion(commitID) ||
-		e.attributeHistory.RemoveVersion(commitID)
+func (e EntityValueHistory) RemoveVersion(commitID uint64) (bool, error) {
+	histRemoved, err := e.idHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	schemaNameRemoved, err := e.schemaNameHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	attributesRemoved, err := e.attributesHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	return histRemoved || schemaNameRemoved || attributesRemoved, nil
 }
 
-func newEntityValueHistory() EntityValueHistory {
+func newEntityValueHistory(storagePath string, rawMap storage.RawMap) EntityValueHistory {
 	return EntityValueHistory{
 		idHistory: history.New[uint64, uint64, uint64](
-			(history.ValueHistory[uint64, uint64, uint64])(history.NewSingleValueHistory[uint64, uint64]())),
+			history.NewSingleValueHistory[uint64, uint64](
+				path.Join(storagePath, "idHistory"), rawMap)),
 		schemaNameHistory: history.New[uint64, string, string](
-			(history.ValueHistory[uint64, string, string])(history.NewSingleValueHistory[uint64, string]())),
-		attributeHistory: history.NewKeyValue[uint64, string, interface{}, interface{}](func() history.ValueHistory[uint64, interface{}, interface{}] {
-			return (history.ValueHistory[uint64, interface{}, interface{}])(history.NewSingleValueHistory[uint64, interface{}]())
+			history.NewSingleValueHistory[uint64, string](
+				path.Join(storagePath, "schemaNameHistory"), rawMap)),
+		attributesHistory: history.NewKeyValue[uint64, string, interface{}, interface{}](func(attribute string) history.ValueHistory[uint64, interface{}, interface{}] {
+			return history.NewSingleValueHistory[uint64, interface{}](
+				path.Join(storagePath, "attributesHistory", attribute), rawMap)
 		}),
 	}
 }

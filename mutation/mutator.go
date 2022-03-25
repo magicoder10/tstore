@@ -2,11 +2,11 @@ package mutation
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"tstore/data"
 	"tstore/history"
-	"tstore/types"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -42,7 +42,10 @@ func (m *Mutator) Start() {
 			err := m.commitTransaction(transaction)
 			if err != nil {
 				fmt.Printf("fail to commit transaction: transaction=%v error=%v\n", transaction.ID, err)
-				m.rollbackTransaction(transaction.ID)
+				err = m.rollbackTransaction(transaction.ID)
+				if err != nil {
+					log.Println(err)
+				}
 			}
 
 			go func(transaction Transaction) {
@@ -87,9 +90,14 @@ func (m *Mutator) commitTransaction(transaction Transaction) error {
 	return m.dataStorage.AppendCommit(commit)
 }
 
-func (m *Mutator) rollbackTransaction(transactionID uint64) {
-	m.dataStorage.EntityHistories.RemoveVersion(transactionID)
-	m.dataStorage.SchemaHistories.RemoveVersion(transactionID)
+func (m *Mutator) rollbackTransaction(transactionID uint64) error {
+	_, err := m.dataStorage.EntityHistories.RemoveVersion(transactionID)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.dataStorage.SchemaHistories.RemoveVersion(transactionID)
+	return err
 }
 
 func (m *Mutator) commitMutation(transactionID uint64, mutation data.Mutation) error {
@@ -119,53 +127,74 @@ func (m *Mutator) commitMutation(transactionID uint64, mutation data.Mutation) e
 
 func (m *Mutator) commitCreateSchemaMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	if _, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName); ok {
+	_, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if exist {
 		return fmt.Errorf("schema already exist: name=%v", schemaName)
 	}
 
-	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
+	return err
 }
 
 func (m *Mutator) commitDeleteSchemaMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
-	return nil
+	_, err := m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
+	return err
 }
 
 func (m *Mutator) commitCreateSchemaAttributeMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	currSchema, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
-	if ok {
+	currSchema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if exist {
 		for attribute := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-			if _, ok = currSchema.Attributes[attribute]; ok {
+			if _, exist = currSchema.Attributes[attribute]; exist {
 				return fmt.Errorf("schema attribute already exist: schema=%v, attribute=%v", schemaName, attribute)
 			}
 		}
 	}
 
-	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	return err
 }
 
 func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	currSchema, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
-	if !ok {
+	currSchema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("schema not found: %s", schemaName)
 	}
 
 	attributes := make(map[string]data.Type)
 	for _, attribute := range mutation.SchemaInput.AttributesToDelete {
-		if _, ok = currSchema.Attributes[attribute]; !ok {
+		if _, exist = currSchema.Attributes[attribute]; !exist {
 			return fmt.Errorf("schema attribute not found: schema=%v, attribute=%v", schemaName, attribute)
 		}
 
 		attributes[attribute] = currSchema.Attributes[attribute]
 	}
 
-	m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
-	entities := m.dataStorage.EntityHistories.ListAllLatestValuesAt(transactionID)
+	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	if err != nil {
+		return err
+	}
+
+	entities, _, err := m.dataStorage.EntityHistories.ListAllLatestValuesAt(transactionID)
+	if err != nil {
+		return err
+	}
+
 	for entityID, entity := range entities {
 		if entity.SchemaName != schemaName {
 			continue
@@ -189,8 +218,12 @@ func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mut
 
 func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.EntityInput.SchemaName
-	schema, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
-	if !ok {
+	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("schema not found: name=%v", schemaName)
 	}
 
@@ -199,42 +232,51 @@ func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.
 		Attributes: mutation.EntityInput.AttributesToCreateOrUpdate,
 	}
 
-	err := validateEntity(schema, entity)
+	err = validateEntity(schema, entity)
 	if err != nil {
 		return err
 	}
 
 	entityID := m.entityIDGen.NextID()
 	mutation.EntityInput.EntityID = entityID
-	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
+	return err
 }
 
 func (m Mutator) commitDeleteEntityMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	_, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
-	if !ok {
+	_, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
-	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
-	return nil
+
+	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
+	return err
 }
 
 func (m Mutator) commitCreateEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
-	if !ok {
+	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
 
-	schema, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
-	if !ok {
+	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
+	if !exist {
 		return fmt.Errorf("schema not found: name=%v", entity.SchemaName)
 	}
 
 	attributes := make(map[string]interface{})
 	for attribute, value := range mutation.EntityInput.AttributesToCreateOrUpdate {
-		if _, ok = entity.Attributes[attribute]; ok {
+		if _, exist = entity.Attributes[attribute]; exist {
 			return fmt.Errorf("attribute already exist: entityID=%v, attribute=%v", entityID, attribute)
 		}
 
@@ -246,45 +288,57 @@ func (m Mutator) commitCreateEntityAttributesMutation(transactionID uint64, muta
 		attributes[attribute] = value
 	}
 
-	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	return err
 }
 
 func (m Mutator) commitDeleteEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
-	if !ok {
+	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
 
 	attributes := make(map[string]interface{})
 	for _, attribute := range mutation.SchemaInput.AttributesToDelete {
-		if _, ok = entity.Attributes[attribute]; !ok {
+		if _, exist = entity.Attributes[attribute]; !exist {
 			return fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
 		}
 
 		attributes[attribute] = entity.Attributes[attribute]
 	}
 
-	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	return err
 }
 
 func (m Mutator) commitUpdateEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, ok := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
-	if !ok {
+	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
 
-	schema, ok := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
-	if !ok {
+	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
 		return fmt.Errorf("schema not found: name=%v", entity.SchemaName)
 	}
 
 	attributes := make(map[string]interface{})
 	for attribute, value := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-		if _, ok = entity.Attributes[attribute]; !ok {
+		if _, exist = entity.Attributes[attribute]; !exist {
 			return fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
 		}
 
@@ -296,8 +350,8 @@ func (m Mutator) commitUpdateEntityAttributesMutation(transactionID uint64, muta
 		attributes[attribute] = value
 	}
 
-	m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
-	return nil
+	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	return err
 }
 
 func validateEntity(schema data.Schema, entity data.Entity) error {
@@ -350,15 +404,6 @@ func validateEntityAttribute(dataType data.Type, value interface{}) error {
 	}
 
 	return nil
-}
-
-func getMapKeys[Key types.Comparable, Value any](input map[Key]Value) []Key {
-	keys := make([]Key, 0)
-	for key := range input {
-		keys = append(keys, key)
-	}
-
-	return keys
 }
 
 func NewMutator(

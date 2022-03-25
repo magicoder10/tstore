@@ -1,6 +1,8 @@
 package history
 
 import (
+	"log"
+
 	"tstore/types"
 )
 
@@ -10,40 +12,43 @@ type KeyValue[
 	Value any,
 	Change any] struct {
 	Histories          map[Key]*History[CommitID, Value, Change] `json:"histories"`
-	createValueHistory func() ValueHistory[CommitID, Value, Change]
+	createValueHistory func(key Key) ValueHistory[CommitID, Value, Change]
 }
 
-func (k KeyValue[CommitID, Key, Value, Change]) FindLatestValueAt(targetCommitID CommitID, key Key) (Value, bool) {
+func (k KeyValue[CommitID, Key, Value, Change]) FindLatestValueAt(targetCommitID CommitID, key Key) (Value, bool, error) {
 	history, ok := k.Histories[key]
 	if !ok {
-		return *new(Value), false
+		return *new(Value), false, nil
 	}
 
 	return history.Value(targetCommitID)
 }
 
-func (k KeyValue[CommitID, Key, Value, Change]) ListAllLatestValuesAt(targetCommitID CommitID) map[Key]Value {
+func (k KeyValue[CommitID, Key, Value, Change]) ListAllLatestValuesAt(targetCommitID CommitID) (map[Key]Value, bool, error) {
 	pairs := make(map[Key]Value)
+	var present bool
 	for key, history := range k.Histories {
-		value, ok := history.Value(targetCommitID)
-		if !ok {
-			continue
+		value, valuePresent, err := history.Value(targetCommitID)
+		if err != nil {
+			log.Println(err)
+			return nil, false, err
 		}
 
+		present = present || valuePresent
 		pairs[key] = value
 	}
 
-	return pairs
+	return pairs, present, nil
 }
 
 func (k KeyValue[CommitID, Key, Value, Change]) FindChangesBetween(
 	beginCommitID CommitID,
 	endCommitID CommitID,
 	key Key,
-) []Version[Value] {
+) ([]Version[Value], error) {
 	history, ok := k.Histories[key]
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	return history.ChangesBetween(beginCommitID, endCommitID)
@@ -52,14 +57,19 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindChangesBetween(
 func (k KeyValue[CommitID, Key, Value, Change]) FindAllChangesBetween(
 	beginCommitID CommitID,
 	endCommitID CommitID,
-) map[Key][]Version[Value] {
+) (map[Key][]Version[Value], error) {
 	values := make(map[Key][]Version[Value])
 	for key, history := range k.Histories {
-		versions := history.ChangesBetween(beginCommitID, endCommitID)
+		versions, err := history.ChangesBetween(beginCommitID, endCommitID)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+
 		values[key] = versions
 	}
 
-	return values
+	return values, nil
 }
 
 func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
@@ -67,30 +77,39 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 	key Key,
 	versionStatus VersionStatus,
 	change Change,
-) bool {
+) (bool, error) {
 	history, ok := k.Histories[key]
 	if !ok {
-		history = New(k.createValueHistory())
+		history = New(k.createValueHistory(key))
 	}
 
-	succeed := history.AddVersion(commitID, versionStatus, change)
+	succeed, err := history.AddVersion(commitID, versionStatus, change)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
 	if !succeed {
-		return false
+		return false, nil
 	}
 
 	k.Histories[key] = history
-	return true
+	return true, nil
 }
 
-func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID) bool {
+func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID) (bool, error) {
 	var hasDeletion bool
 	for _, hist := range k.Histories {
-		if hist.RemoveVersion(commitID) {
-			hasDeletion = true
+		removed, err := hist.RemoveVersion(commitID)
+		if err != nil {
+			log.Println(err)
+			return false, err
 		}
+
+		hasDeletion = hasDeletion || removed
 	}
 
-	return hasDeletion
+	return hasDeletion, nil
 }
 
 func NewKeyValue[
@@ -98,7 +117,7 @@ func NewKeyValue[
 	Key types.Comparable,
 	Value any,
 	Change any](
-	createValueHistory func() ValueHistory[CommitID, Value, Change],
+	createValueHistory func(key Key) ValueHistory[CommitID, Value, Change],
 ) KeyValue[CommitID, Key, Value, Change] {
 	return KeyValue[CommitID, Key, Value, Change]{
 		Histories:          make(map[Key]*History[CommitID, Value, Change]),

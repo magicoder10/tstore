@@ -6,6 +6,7 @@ import (
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
+	"tstore/storage"
 )
 
 type Database struct {
@@ -53,8 +54,8 @@ func (d Database) DeleteAllData() error {
 	return d.databaseStorage.DeleteAllData()
 }
 
-func NewDatabase(name string) (Database, error) {
-	dataStorage := data.NewStorage(name)
+func NewDatabase(name string, rawMap storage.RawMap) (Database, error) {
+	dataStorage := data.NewStorage(name, rawMap)
 	mutator, err := mutation.NewMutator(dataStorage, name)
 	if err != nil {
 		return Database{}, err
