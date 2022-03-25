@@ -16,7 +16,11 @@ func (e Executor) QueryEntitiesAtCommit(commitID uint64, query lang.Expression) 
 		return nil, err
 	}
 
-	entities := e.getEntitiesAtCommit(commitID)
+	entities, err := e.getEntitiesAtCommit(commitID)
+	if err != nil {
+		return nil, err
+	}
+
 	return collector(entities), nil
 }
 
@@ -26,7 +30,11 @@ func (e Executor) QueryEntityGroupsAtCommit(commitID uint64, query lang.Expressi
 		return nil, err
 	}
 
-	entities := e.getEntitiesAtCommit(commitID)
+	entities, err := e.getEntitiesAtCommit(commitID)
+	if err != nil {
+		return nil, err
+	}
+
 	return groupCollector(entities), nil
 }
 
@@ -39,7 +47,11 @@ func (e Executor) QueryEntitiesBetweenCommits(
 		return nil, err
 	}
 
-	versionGroups := e.dataStorage.EntityHistories.FindAllChangesBetween(beginCommitID, endCommitID)
+	versionGroups, err := e.dataStorage.EntityHistories.FindAllChangesBetween(beginCommitID, endCommitID)
+	if err != nil {
+		return nil, err
+	}
+
 	for entityID, versions := range versionGroups {
 		versionGroups[entityID] = collector(versions)
 	}
@@ -47,14 +59,18 @@ func (e Executor) QueryEntitiesBetweenCommits(
 	return versionGroups, nil
 }
 
-func (e Executor) getEntitiesAtCommit(commitID uint64) []data.Entity {
-	entityMap := e.dataStorage.EntityHistories.ListAllLatestValuesAt(commitID)
+func (e Executor) getEntitiesAtCommit(commitID uint64) ([]data.Entity, error) {
+	entityMap, _, err := e.dataStorage.EntityHistories.ListAllLatestValuesAt(commitID)
+	if err != nil {
+		return nil, err
+	}
+
 	entities := make([]data.Entity, 0)
 	for _, entity := range entityMap {
 		entities = append(entities, entity)
 	}
 
-	return entities
+	return entities, nil
 }
 
 func NewExecutor(dataStorage *data.Storage) Executor {

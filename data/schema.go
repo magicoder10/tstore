@@ -1,7 +1,11 @@
 package data
 
 import (
+	"log"
+	"path"
+
 	"tstore/history"
+	"tstore/storage"
 )
 
 type Schema struct {
@@ -18,57 +22,138 @@ type SchemaInput struct {
 // TODO: handle schema name change
 
 type SchemaValueHistory struct {
-	nameHistory      *history.History[uint64, string, string]
-	attributeHistory history.KeyValue[uint64, string, Type, Type]
+	nameHistory       *history.History[uint64, string, string]
+	attributesHistory history.KeyValue[uint64, string, Type, Type]
 }
 
-func (s SchemaValueHistory) Value(commitID uint64) Schema {
-	name, _ := s.nameHistory.Value(commitID)
-	return Schema{
-		Name:       name,
-		Attributes: s.attributeHistory.ListAllLatestValuesAt(commitID),
+func (s SchemaValueHistory) Value(commitID uint64) (Schema, bool, error) {
+	schema := Schema{}
+	name, nameExist, err := s.nameHistory.Value(commitID)
+	if err != nil {
+		log.Println(err)
+		return Schema{}, false, err
 	}
+
+	if nameExist {
+		schema.Name = name
+	}
+
+	attributes, attributesExist, err := s.attributesHistory.ListAllLatestValuesAt(commitID)
+	if err != nil {
+		log.Println(err)
+		return Schema{}, false, err
+	}
+
+	if attributesExist {
+		schema.Attributes = attributes
+	}
+
+	exist := nameExist || attributesExist
+	return schema, exist, nil
 }
 
-func (s SchemaValueHistory) AddVersion(commitID uint64, mutation Mutation) bool {
+func (s SchemaValueHistory) AddVersion(commitID uint64, mutation Mutation) (bool, error) {
+	// TODO: return true when all AddVersion for a given mutation returns true
+	var updated bool
+
 	switch mutation.Type {
 	case CreateSchemaMutation:
-		s.nameHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.SchemaInput.Name)
+		nameUpdated, err := s.nameHistory.AddVersion(commitID, history.CreatedVersionStatus, mutation.SchemaInput.Name)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || nameUpdated
+
 		for attribute, dataType := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-			s.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			attributeUpdated, err := s.attributesHistory.AddVersion(
+				commitID, attribute, history.CreatedVersionStatus, dataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case DeleteSchemaMutation:
-		s.nameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
-		attributes := s.attributeHistory.ListAllLatestValuesAt(commitID)
+		nameUpdated, err := s.nameHistory.AddVersion(commitID, history.DeletedVersionStatus, "")
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
+		updated = updated || nameUpdated
+
+		attributes, _, err := s.attributesHistory.ListAllLatestValuesAt(commitID)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+
 		for attribute := range attributes {
-			s.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			attributeUpdated, err := s.attributesHistory.AddVersion(
+				commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case CreateSchemaAttributesMutation:
 		for attribute, dataType := range mutation.SchemaInput.AttributesToCreateOrUpdate {
-			s.attributeHistory.AddVersion(commitID, attribute, history.CreatedVersionStatus, dataType)
+			attributeUpdated, err := s.attributesHistory.AddVersion(
+				commitID, attribute, history.CreatedVersionStatus, dataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	case DeleteSchemaAttributesMutation:
 		for _, attribute := range mutation.SchemaInput.AttributesToDelete {
-			s.attributeHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			attributeUpdated, err := s.attributesHistory.AddVersion(commitID, attribute, history.DeletedVersionStatus, NoneDataType)
+			if err != nil {
+				log.Println(err)
+				return false, err
+			}
+
+			updated = updated || attributeUpdated
 		}
 	default:
-		return false
+		return false, nil
 	}
 
-	return true
+	return updated, nil
 }
 
-func (s SchemaValueHistory) RemoveVersion(commitID uint64) bool {
-	return s.nameHistory.RemoveVersion(commitID) || s.attributeHistory.RemoveVersion(commitID)
+func (s SchemaValueHistory) RemoveVersion(commitID uint64) (bool, error) {
+	nameRemoved, err := s.nameHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	attributesRemoved, err := s.attributesHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	return nameRemoved || attributesRemoved, nil
 }
 
-func newSchemaValueHistory() SchemaValueHistory {
+func newSchemaValueHistory(storagePath string, rawMap storage.RawMap) SchemaValueHistory {
 	return SchemaValueHistory{
 		nameHistory: history.New[uint64, string, string](
-			(history.ValueHistory[uint64, string, string])(history.NewSingleValueHistory[uint64, string]())),
-		attributeHistory: history.NewKeyValue[uint64, string, Type, Type](
-			func() history.ValueHistory[uint64, Type, Type] {
-				return (history.ValueHistory[uint64, Type, Type])(history.NewSingleValueHistory[uint64, Type]())
+			history.NewSingleValueHistory[uint64, string](
+				path.Join(storagePath, "nameHistory"), rawMap)),
+		attributesHistory: history.NewKeyValue[uint64, string, Type, Type](
+			func(attribute string) history.ValueHistory[uint64, Type, Type] {
+				return history.NewSingleValueHistory[uint64, Type](
+					path.Join(storagePath, "attributesHistory", attribute), rawMap)
 			}),
 	}
 }

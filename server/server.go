@@ -9,9 +9,11 @@ import (
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
+	"tstore/storage"
 )
 
 type Server struct {
+	rawMap    storage.RawMap
 	databases map[string]database.Database
 }
 
@@ -29,7 +31,7 @@ func (s Server) CreateDatabase(name string) error {
 		return fmt.Errorf("database already exist: name=%v", name)
 	}
 
-	db, err := database.NewDatabase(name)
+	db, err := database.NewDatabase(name, s.rawMap)
 	if err != nil {
 		return err
 	}
@@ -107,6 +109,7 @@ func (s Server) GetLatestCommit(dbName string) (data.Commit, error) {
 }
 
 func newServer() (Server, error) {
+	rawMap := storage.NewLocalFileMap("./userData/map")
 	databases, err := readDatabases()
 	if err != nil {
 		fmt.Printf("%v\n", err)
@@ -115,7 +118,7 @@ func newServer() (Server, error) {
 
 	dbMap := make(map[string]database.Database)
 	for _, dbName := range databases {
-		db, err := database.NewDatabase(dbName)
+		db, err := database.NewDatabase(dbName, rawMap)
 		if err != nil {
 			return Server{}, err
 		}
@@ -124,6 +127,7 @@ func newServer() (Server, error) {
 	}
 
 	return Server{
+		rawMap:    rawMap,
 		databases: dbMap,
 	}, nil
 }

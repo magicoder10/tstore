@@ -1,7 +1,7 @@
 package history
 
 import (
-	"fmt"
+	"log"
 
 	"tstore/types"
 )
@@ -15,33 +15,33 @@ type History[
 	CommitHistory []CommitID                            `json:"commit_history"`
 }
 
-func (h History[CommitID, Value, Change]) Value(targetCommitID CommitID) (Value, bool) {
-	endCommitID, err := findLargestSmallerThan[CommitID](h.CommitHistory, targetCommitID)
-	if err != nil {
-		return *new(Value), false
+func (h History[CommitID, Value, Change]) Value(targetCommitID CommitID) (Value, bool, error) {
+	endCommitID, found := findLargestSmallerThan[CommitID](h.CommitHistory, targetCommitID)
+	if !found {
+		return *new(Value), false, nil
 	}
 
 	versionStatus := h.CommitMap[endCommitID]
 	if versionStatus == DeletedVersionStatus {
-		return *new(Value), false
+		return *new(Value), false, nil
 	} else {
-		return h.ValueHistory.Value(endCommitID), true
+		return h.ValueHistory.Value(endCommitID)
 	}
 }
 
 func (h History[CommitID, Value, Change]) ChangesBetween(
 	beginCommitID CommitID,
 	endCommitID CommitID,
-) []Version[Value] {
+) ([]Version[Value], error) {
 	inBetweenCommitIDs := findAllInBetween(h.CommitHistory, beginCommitID, endCommitID)
 	var versions []Version[Value]
 
 	for _, commitID := range inBetweenCommitIDs {
 		versionStatus := h.CommitMap[commitID]
-
-		var value Value
-		if versionStatus != DeletedVersionStatus {
-			value = h.ValueHistory.Value(commitID)
+		value, _, err := h.ValueHistory.Value(commitID)
+		if err != nil {
+			log.Println(err)
+			return []Version[Value]{}, err
 		}
 
 		version := Version[Value]{
@@ -51,39 +51,50 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 		versions = append(versions, version)
 	}
 
-	return versions
+	return versions, nil
 }
 
 func (h *History[CommitID, Value, Change]) AddVersion(
 	commitID CommitID,
 	versionStatus VersionStatus,
 	change Change,
-) bool {
+) (bool, error) {
 	_, ok := h.CommitMap[commitID]
 	if ok {
-		return false
+		return false, nil
 	}
+
+	var updated bool
+	var err error
 
 	if versionStatus != DeletedVersionStatus {
-		h.ValueHistory.AddVersion(commitID, change)
+		updated, err = h.ValueHistory.AddVersion(commitID, change)
+		if err != nil {
+			return false, err
+		}
 	}
 
-	h.CommitHistory = append(([]CommitID)(h.CommitHistory), commitID)
+	h.CommitHistory = append(h.CommitHistory, commitID)
 	h.CommitMap[commitID] = versionStatus
 
-	return true
+	return updated, nil
 }
 
-func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) bool {
+func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) (bool, error) {
 	_, ok := h.CommitMap[commitID]
 	if ok {
-		return false
+		return false, nil
 	}
 
-	h.ValueHistory.RemoveVersion(commitID)
-	h.CommitHistory = h.CommitHistory[:len(([]CommitID)(h.CommitHistory))-1]
+	removed, err := h.ValueHistory.RemoveVersion(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	h.CommitHistory = h.CommitHistory[:len(h.CommitHistory)-1]
 	delete(h.CommitMap, commitID)
-	return true
+	return removed, nil
 }
 
 func New[
@@ -111,13 +122,13 @@ func findAllInBetween[Item types.Comparable](sortedItems []Item, begin Item, end
 	return between
 }
 
-func findLargestSmallerThan[Item types.Comparable](sortedItems []Item, end Item) (Item, error) {
+func findLargestSmallerThan[Item types.Comparable](sortedItems []Item, end Item) (Item, bool) {
 	for index := len(sortedItems) - 1; index >= 0; index-- {
 		item := sortedItems[index]
 		if item <= end {
-			return item, nil
+			return item, true
 		}
 	}
 
-	return *new(Item), fmt.Errorf("item not found")
+	return *new(Item), false
 }
