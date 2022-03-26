@@ -14,7 +14,7 @@ type History[
 	CommitID types.Comparable,
 	Value any,
 	Change any] struct {
-	commitMap     map[CommitID]VersionStatus
+	commitsMap    reliable.Map[CommitID, VersionStatus]
 	valueHistory  ValueHistory[CommitID, Value, Change]
 	commitHistory reliable.List[CommitID]
 }
@@ -32,7 +32,12 @@ func (h History[CommitID, Value, Change]) Value(targetCommitID CommitID) (Value,
 		return *new(Value), false, nil
 	}
 
-	versionStatus := h.commitMap[endCommitID]
+	versionStatus, err := h.commitsMap.Get(endCommitID)
+	if err != nil {
+		log.Println(err)
+		return *new(Value), false, err
+	}
+
 	if versionStatus == DeletedVersionStatus {
 		return *new(Value), false, nil
 	} else {
@@ -53,7 +58,12 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 	var versions []Version[Value]
 
 	for _, commitID := range inBetweenCommitIDs {
-		versionStatus := h.commitMap[commitID]
+		versionStatus, err := h.commitsMap.Get(endCommitID)
+		if err != nil {
+			log.Println(err)
+			return []Version[Value]{}, err
+		}
+
 		value, _, err := h.valueHistory.Value(commitID)
 		if err != nil {
 			log.Println(err)
@@ -75,14 +85,16 @@ func (h *History[CommitID, Value, Change]) AddVersion(
 	versionStatus VersionStatus,
 	change Change,
 ) (bool, error) {
-	_, ok := h.commitMap[commitID]
-	if ok {
+	contain, err := h.commitsMap.Contain(commitID)
+	if err != nil {
+		return false, err
+	}
+
+	if contain {
 		return false, nil
 	}
 
 	var updated bool
-	var err error
-
 	if versionStatus != DeletedVersionStatus {
 		updated, err = h.valueHistory.AddVersion(commitID, change)
 		if err != nil {
@@ -97,13 +109,16 @@ func (h *History[CommitID, Value, Change]) AddVersion(
 		return false, err
 	}
 
-	h.commitMap[commitID] = versionStatus
-	return updated, nil
+	return updated, h.commitsMap.Set(commitID, versionStatus)
 }
 
 func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) (bool, error) {
-	_, ok := h.commitMap[commitID]
-	if ok {
+	contain, err := h.commitsMap.Contain(commitID)
+	if err != nil {
+		return false, err
+	}
+
+	if contain {
 		return false, nil
 	}
 
@@ -127,8 +142,7 @@ func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) (boo
 		}
 	}
 
-	delete(h.commitMap, commitID)
-	return removed, nil
+	return removed, h.commitsMap.Delete(commitID)
 }
 
 func New[
@@ -153,8 +167,13 @@ func New[
 		return nil, err
 	}
 
+	reliableMap, err := reliable.NewMap[CommitID, VersionStatus](path.Join(storagePath, "commits"), refGen, rawMap)
+	if err != nil {
+		return nil, err
+	}
+
 	return &History[CommitID, Value, Change]{
-		commitMap:     make(map[CommitID]VersionStatus),
+		commitsMap:    reliableMap,
 		valueHistory:  valueHistory,
 		commitHistory: commitIDs,
 	}, nil

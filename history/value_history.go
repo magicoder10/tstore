@@ -4,6 +4,7 @@ import (
 	"log"
 	"path"
 
+	"tstore/idgen"
 	"tstore/reliable"
 	"tstore/storage"
 	"tstore/types"
@@ -67,11 +68,16 @@ func (s SingleValueHistory[CommitID, Value]) RemoveVersion(commitID CommitID) (b
 
 func NewSingleValueHistory[CommitID types.Comparable, Value any](
 	storagePath string,
+	refGen *idgen.IDGen,
 	rawMap storage.RawMap,
-) *SingleValueHistory[CommitID, Value] {
-	commitsMap := reliable.NewMap[CommitID, Value](path.Join(storagePath, "commits"), rawMap)
+) (*SingleValueHistory[CommitID, Value], error) {
+	commitsMap, err := reliable.NewMap[CommitID, Value](path.Join(storagePath, "commits"), refGen, rawMap)
+	if err != nil {
+		return nil, err
+	}
+
 	return &SingleValueHistory[CommitID, Value]{
 		storagePath: storagePath,
 		commitsMap:  commitsMap,
-	}
+	}, nil
 }

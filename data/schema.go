@@ -152,19 +152,25 @@ func newSchemaValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 		refGen,
 		rawMap,
 		func(storagePath string) (history.ValueHistory[uint64, string, string], error) {
-			return history.NewSingleValueHistory[uint64, string](storagePath, rawMap), nil
+			return history.NewSingleValueHistory[uint64, string](storagePath, refGen, rawMap)
 		})
 	if err != nil {
 		return SchemaValueHistory{}, err
 	}
+
+	attributesHistory, err := history.NewKeyValue[uint64, string, Type, Type](
+		path.Join(storagePath, "attributesHistory"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, Type, Type], error) {
+			return history.NewSingleValueHistory[uint64, Type](storagePath, refGen, rawMap)
+		})
+	if err != nil {
+		return SchemaValueHistory{}, err
+	}
+
 	return SchemaValueHistory{
-		nameHistory: nameHistory,
-		attributesHistory: history.NewKeyValue[uint64, string, Type, Type](
-			path.Join(storagePath, "attributesHistory"),
-			refGen,
-			rawMap,
-			func(storagePath string) (history.ValueHistory[uint64, Type, Type], error) {
-				return history.NewSingleValueHistory[uint64, Type](storagePath, rawMap), nil
-			}),
+		nameHistory:       nameHistory,
+		attributesHistory: attributesHistory,
 	}, nil
 }
