@@ -5,6 +5,7 @@ import (
 	"path"
 
 	"tstore/history"
+	"tstore/idgen"
 	"tstore/storage"
 )
 
@@ -145,15 +146,25 @@ func (s SchemaValueHistory) RemoveVersion(commitID uint64) (bool, error) {
 	return nameRemoved || attributesRemoved, nil
 }
 
-func newSchemaValueHistory(storagePath string, rawMap storage.RawMap) SchemaValueHistory {
-	return SchemaValueHistory{
-		nameHistory: history.New[uint64, string, string](
-			history.NewSingleValueHistory[uint64, string](
-				path.Join(storagePath, "nameHistory"), rawMap)),
-		attributesHistory: history.NewKeyValue[uint64, string, Type, Type](
-			func(attribute string) history.ValueHistory[uint64, Type, Type] {
-				return history.NewSingleValueHistory[uint64, Type](
-					path.Join(storagePath, "attributesHistory", attribute), rawMap)
-			}),
+func newSchemaValueHistory(storagePath string, refGen *idgen.IDGen, rawMap storage.RawMap) (SchemaValueHistory, error) {
+	nameHistory, err := history.New[uint64, string, string](
+		path.Join(storagePath, "nameHistory"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, string, string], error) {
+			return history.NewSingleValueHistory[uint64, string](storagePath, rawMap), nil
+		})
+	if err != nil {
+		return SchemaValueHistory{}, err
 	}
+	return SchemaValueHistory{
+		nameHistory: nameHistory,
+		attributesHistory: history.NewKeyValue[uint64, string, Type, Type](
+			path.Join(storagePath, "attributesHistory"),
+			refGen,
+			rawMap,
+			func(storagePath string) (history.ValueHistory[uint64, Type, Type], error) {
+				return history.NewSingleValueHistory[uint64, Type](storagePath, rawMap), nil
+			}),
+	}, nil
 }

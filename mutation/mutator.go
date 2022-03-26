@@ -14,7 +14,7 @@ import (
 const bufferSize = 500
 
 type Mutator struct {
-	dataStorage            *data.Storage
+	dataWithVersion        *data.WithVersion
 	transactionStorage     TransactionStorage
 	entityIDGen            IDGen
 	transactionIDGen       IDGen
@@ -41,7 +41,7 @@ func (m *Mutator) Start() {
 		for transaction := range m.incomingTransactions {
 			err := m.commitTransaction(transaction)
 			if err != nil {
-				fmt.Printf("fail to commit transaction: transaction=%v error=%v\n", transaction.ID, err)
+				log.Printf("fail to commit transaction: transaction=%v error=%v\n", transaction.ID, err)
 				err = m.rollbackTransaction(transaction.ID)
 				if err != nil {
 					log.Println(err)
@@ -56,10 +56,12 @@ func (m *Mutator) Start() {
 }
 
 func (m *Mutator) commitTransaction(transaction Transaction) error {
+	log.Printf("[commitTransaction] %v\n", transaction)
 	err := m.transactionStorage.WriteTransactionLog(TransactionStartLogLine{
 		TransactionID: transaction.ID,
 	})
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -71,15 +73,18 @@ func (m *Mutator) commitTransaction(transaction Transaction) error {
 			for _, mutation := range mutations {
 				err := m.commitMutation(transaction.ID, mutation)
 				if err != nil {
+					log.Println(err)
 					return err
 				}
 			}
+
 			return nil
 		})
 	}
 
 	err = errGroup.Wait()
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -87,20 +92,27 @@ func (m *Mutator) commitTransaction(transaction Transaction) error {
 		CommittedTransactionID: transaction.ID,
 		CommittedAt:            time.Now(),
 	}
-	return m.dataStorage.AppendCommit(commit)
+	return m.dataWithVersion.AppendCommit(commit)
 }
 
 func (m *Mutator) rollbackTransaction(transactionID uint64) error {
-	_, err := m.dataStorage.EntityHistories.RemoveVersion(transactionID)
+	_, err := m.dataWithVersion.EntityHistories.RemoveVersion(transactionID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
-	_, err = m.dataStorage.SchemaHistories.RemoveVersion(transactionID)
+	_, err = m.dataWithVersion.SchemaHistories.RemoveVersion(transactionID)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
 	return err
 }
 
 func (m *Mutator) commitMutation(transactionID uint64, mutation data.Mutation) error {
+	log.Printf("[commitMutation] transactionID=%v, mutation=%v\n", transactionID, mutation)
 	switch mutation.Type {
 	case data.CreateSchemaMutation:
 		return m.commitCreateSchemaMutation(transactionID, mutation)
@@ -127,48 +139,69 @@ func (m *Mutator) commitMutation(transactionID uint64, mutation data.Mutation) e
 
 func (m *Mutator) commitCreateSchemaMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	_, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	_, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if exist {
-		return fmt.Errorf("schema already exist: name=%v", schemaName)
+		err = fmt.Errorf("schema already exist: name=%v", schemaName)
+		log.Println(err)
+		return err
 	}
 
-	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.SchemaHistories.AddVersion(transactionID, schemaName, history.CreatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
 	return err
 }
 
 func (m *Mutator) commitDeleteSchemaMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	_, err := m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
+	_, err := m.dataWithVersion.SchemaHistories.AddVersion(transactionID, schemaName, history.DeletedVersionStatus, data.Mutation{})
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
 	return err
 }
 
 func (m *Mutator) commitCreateSchemaAttributeMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	currSchema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	currSchema, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if exist {
 		for attribute := range mutation.SchemaInput.AttributesToCreateOrUpdate {
 			if _, exist = currSchema.Attributes[attribute]; exist {
-				return fmt.Errorf("schema attribute already exist: schema=%v, attribute=%v", schemaName, attribute)
+				err = fmt.Errorf("schema attribute already exist: schema=%v, attribute=%v", schemaName, attribute)
+				log.Println(err)
+				return err
 			}
 		}
 	}
 
-	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
 func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.SchemaInput.Name
-	currSchema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	currSchema, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -179,19 +212,23 @@ func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mut
 	attributes := make(map[string]data.Type)
 	for _, attribute := range mutation.SchemaInput.AttributesToDelete {
 		if _, exist = currSchema.Attributes[attribute]; !exist {
-			return fmt.Errorf("schema attribute not found: schema=%v, attribute=%v", schemaName, attribute)
+			err = fmt.Errorf("schema attribute not found: schema=%v, attribute=%v", schemaName, attribute)
+			log.Println(err)
+			return err
 		}
 
 		attributes[attribute] = currSchema.Attributes[attribute]
 	}
 
-	_, err = m.dataStorage.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.SchemaHistories.AddVersion(transactionID, schemaName, history.UpdatedVersionStatus, mutation)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
-	entities, _, err := m.dataStorage.EntityHistories.ListAllLatestValuesAt(transactionID)
+	entities, _, err := m.dataWithVersion.EntityHistories.ListAllLatestValuesAt(transactionID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -209,6 +246,7 @@ func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mut
 			},
 		})
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 	}
@@ -218,13 +256,16 @@ func (m *Mutator) commitDeleteSchemaAttributesMutation(transactionID uint64, mut
 
 func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.Mutation) error {
 	schemaName := mutation.EntityInput.SchemaName
-	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
+	schema, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, schemaName)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if !exist {
-		return fmt.Errorf("schema not found: name=%v", schemaName)
+		err = fmt.Errorf("schema not found: name=%v", schemaName)
+		log.Println(err)
+		return err
 	}
 
 	entity := data.Entity{
@@ -234,92 +275,131 @@ func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.
 
 	err = validateEntity(schema, entity)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	entityID := m.entityIDGen.NextID()
 	mutation.EntityInput.EntityID = entityID
-	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
 func (m Mutator) commitDeleteEntityMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	_, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	_, exist, err := m.dataWithVersion.EntityHistories.FindLatestValueAt(transactionID, entityID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if !exist {
-		return fmt.Errorf("entity not found: %v", entityID)
+		err = fmt.Errorf("entity not found: %v", entityID)
+		log.Println(err)
+		return err
 	}
 
-	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
+	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.DeletedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
 func (m Mutator) commitCreateEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	entity, exist, err := m.dataWithVersion.EntityHistories.FindLatestValueAt(transactionID, entityID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if !exist {
-		return fmt.Errorf("entity not found: %v", entityID)
+		err = fmt.Errorf("entity not found: %v", entityID)
+		log.Println(err)
+		return err
 	}
 
-	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
+	schema, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
 	if !exist {
-		return fmt.Errorf("schema not found: name=%v", entity.SchemaName)
+		err = fmt.Errorf("schema not found: name=%v", entity.SchemaName)
+		log.Println(err)
+		return err
 	}
 
 	attributes := make(map[string]interface{})
 	for attribute, value := range mutation.EntityInput.AttributesToCreateOrUpdate {
 		if _, exist = entity.Attributes[attribute]; exist {
-			return fmt.Errorf("attribute already exist: entityID=%v, attribute=%v", entityID, attribute)
+			err = fmt.Errorf("attribute already exist: entityID=%v, attribute=%v", entityID, attribute)
+			log.Println(err)
+			return err
 		}
 
-		err := validateEntityAttribute(schema.Attributes[attribute], value)
+		err = validateEntityAttribute(schema.Attributes[attribute], value)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 
 		attributes[attribute] = value
 	}
 
-	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
 func (m Mutator) commitDeleteEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	entity, exist, err := m.dataWithVersion.EntityHistories.FindLatestValueAt(transactionID, entityID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if !exist {
-		return fmt.Errorf("entity not found: %v", entityID)
+		err = fmt.Errorf("entity not found: %v", entityID)
+		log.Println(err)
+		return err
 	}
 
 	attributes := make(map[string]interface{})
 	for _, attribute := range mutation.SchemaInput.AttributesToDelete {
 		if _, exist = entity.Attributes[attribute]; !exist {
-			return fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
+			err = fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
+			log.Println(err)
+			return err
 		}
 
 		attributes[attribute] = entity.Attributes[attribute]
 	}
 
-	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
 func (m Mutator) commitUpdateEntityAttributesMutation(transactionID uint64, mutation data.Mutation) error {
 	entityID := mutation.EntityInput.EntityID
-	entity, exist, err := m.dataStorage.EntityHistories.FindLatestValueAt(transactionID, entityID)
+	entity, exist, err := m.dataWithVersion.EntityHistories.FindLatestValueAt(transactionID, entityID)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -327,30 +407,40 @@ func (m Mutator) commitUpdateEntityAttributesMutation(transactionID uint64, muta
 		return fmt.Errorf("entity not found: %v", entityID)
 	}
 
-	schema, exist, err := m.dataStorage.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
+	schema, exist, err := m.dataWithVersion.SchemaHistories.FindLatestValueAt(transactionID, entity.SchemaName)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
 	if !exist {
-		return fmt.Errorf("schema not found: name=%v", entity.SchemaName)
+		err = fmt.Errorf("schema not found: name=%v", entity.SchemaName)
+		log.Println(err)
+		return err
 	}
 
 	attributes := make(map[string]interface{})
 	for attribute, value := range mutation.SchemaInput.AttributesToCreateOrUpdate {
 		if _, exist = entity.Attributes[attribute]; !exist {
-			return fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
+			err = fmt.Errorf("entity attribute not found: entity=%v, attribute=%v", entityID, attribute)
+			log.Println(err)
+			return err
 		}
 
-		err := validateEntityAttribute(schema.Attributes[attribute], value)
+		err = validateEntityAttribute(schema.Attributes[attribute], value)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 
 		attributes[attribute] = value
 	}
 
-	_, err = m.dataStorage.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.UpdatedVersionStatus, mutation)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return err
 }
 
@@ -358,14 +448,18 @@ func validateEntity(schema data.Schema, entity data.Entity) error {
 	for attribute, value := range entity.Attributes {
 		dataType, ok := schema.Attributes[attribute]
 		if !ok {
-			return fmt.Errorf(
+			err := fmt.Errorf(
 				"attribute not found on schema: schema=%v entity=%v attribute=%v",
 				schema.Name,
 				entity.ID,
 				attribute)
+			log.Println(err)
+			return err
 		}
+
 		err := validateEntityAttribute(dataType, value)
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 	}
@@ -377,56 +471,87 @@ func validateEntityAttribute(dataType data.Type, value interface{}) error {
 	switch value.(type) {
 	case int8, int16, int, int64, uint8, uint16, uint32, uint64:
 		if dataType != data.IntDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=int", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=int", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	case float32, float64:
 		if dataType != data.DecimalDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=float", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=float", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	case bool:
 		if dataType != data.BoolDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=bool", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=bool", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	case string:
 		if dataType != data.StringDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=string", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=string", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	case rune:
 		if dataType != data.RuneDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=rune", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=rune", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	case time.Time:
 		if dataType != data.DatetimeDataType {
-			return fmt.Errorf("dataType mismatch: expected=%v actual=time", dataType)
+			err := fmt.Errorf("dataType mismatch: expected=%v actual=time", dataType)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
 		}
 	default:
-		return fmt.Errorf("unsupported data type: value=%v", value)
+		err := fmt.Errorf("unsupported data type: value=%v", value)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 
 	return nil
 }
 
 func NewMutator(
-	dataStorage *data.Storage,
+	dataWithVersion *data.WithVersion,
 	dbName string,
 ) (*Mutator, error) {
 	transactionStorage, err := NewTransactionStorage(dbName)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
 	entityIDGen, err := newIDGen(dbName, "entity")
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
 	transactionIDGen, err := newIDGen(dbName, "transaction")
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
 	return &Mutator{
-		dataStorage:            dataStorage,
+		dataWithVersion:        dataWithVersion,
 		transactionStorage:     transactionStorage,
 		entityIDGen:            entityIDGen,
 		transactionIDGen:       transactionIDGen,

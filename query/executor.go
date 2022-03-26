@@ -7,7 +7,7 @@ import (
 )
 
 type Executor struct {
-	dataStorage *data.Storage
+	dataWithVersion *data.WithVersion
 }
 
 func (e Executor) QueryEntitiesAtCommit(commitID uint64, query lang.Expression) ([]data.Entity, error) {
@@ -47,7 +47,7 @@ func (e Executor) QueryEntitiesBetweenCommits(
 		return nil, err
 	}
 
-	versionGroups, err := e.dataStorage.EntityHistories.FindAllChangesBetween(beginCommitID, endCommitID)
+	versionGroups, err := e.dataWithVersion.EntityHistories.FindAllChangesBetween(beginCommitID, endCommitID)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (e Executor) QueryEntitiesBetweenCommits(
 }
 
 func (e Executor) getEntitiesAtCommit(commitID uint64) ([]data.Entity, error) {
-	entityMap, _, err := e.dataStorage.EntityHistories.ListAllLatestValuesAt(commitID)
+	entityMap, _, err := e.dataWithVersion.EntityHistories.ListAllLatestValuesAt(commitID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +73,6 @@ func (e Executor) getEntitiesAtCommit(commitID uint64) ([]data.Entity, error) {
 	return entities, nil
 }
 
-func NewExecutor(dataStorage *data.Storage) Executor {
-	return Executor{dataStorage: dataStorage}
+func NewExecutor(dataWithVersion *data.WithVersion) Executor {
+	return Executor{dataWithVersion: dataWithVersion}
 }

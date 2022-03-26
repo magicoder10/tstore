@@ -78,8 +78,8 @@ func (s SingleValueHistory[CommitID, Value]) commitPath(commitID CommitID) strin
 func NewSingleValueHistory[CommitID types.Comparable, Value any](
 	storagePath string,
 	rawMap storage.RawMap,
-) SingleValueHistory[CommitID, Value] {
-	return SingleValueHistory[CommitID, Value]{
+) *SingleValueHistory[CommitID, Value] {
+	return &SingleValueHistory[CommitID, Value]{
 		storagePath: storagePath,
 		rawMap:      rawMap,
 	}

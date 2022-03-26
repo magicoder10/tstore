@@ -1,8 +1,12 @@
 package history
 
 import (
+	"fmt"
 	"log"
+	"path"
 
+	"tstore/idgen"
+	"tstore/storage"
 	"tstore/types"
 )
 
@@ -11,8 +15,11 @@ type KeyValue[
 	Key types.Comparable,
 	Value any,
 	Change any] struct {
+	storagePath        string
+	refGen             *idgen.IDGen
+	rawMap             storage.RawMap
 	Histories          map[Key]*History[CommitID, Value, Change] `json:"histories"`
-	createValueHistory func(key Key) ValueHistory[CommitID, Value, Change]
+	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error)
 }
 
 func (k KeyValue[CommitID, Key, Value, Change]) FindLatestValueAt(targetCommitID CommitID, key Key) (Value, bool, error) {
@@ -78,12 +85,27 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 	versionStatus VersionStatus,
 	change Change,
 ) (bool, error) {
+	log.Printf(
+		"[KeyValue][AddVersion] commitID=%v, key=%v, versionStatus=%v, change=%v\n",
+		commitID,
+		key,
+		versionStatus,
+		change)
 	history, ok := k.Histories[key]
+	historyPath := path.Join(k.storagePath, "histories", fmt.Sprintf("%v", key))
+
 	if !ok {
-		history = New(k.createValueHistory(key))
+		log.Println("[KeyValue][AddVersion] create history")
+		var err error
+		history, err = New(historyPath, k.refGen, k.rawMap, k.createValueHistory)
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
 	}
 
 	succeed, err := history.AddVersion(commitID, versionStatus, change)
+	log.Printf("[KeyValue][AddVersion] try add new version to history, succeed=%v\n", succeed)
 	if err != nil {
 		log.Println(err)
 		return false, err
@@ -93,6 +115,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 		return false, nil
 	}
 
+	log.Println("[KeyValue][AddVersion] added new version to history")
 	k.Histories[key] = history
 	return true, nil
 }
@@ -117,9 +140,15 @@ func NewKeyValue[
 	Key types.Comparable,
 	Value any,
 	Change any](
-	createValueHistory func(key Key) ValueHistory[CommitID, Value, Change],
+	storagePath string,
+	refGen *idgen.IDGen,
+	rawMap storage.RawMap,
+	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error),
 ) KeyValue[CommitID, Key, Value, Change] {
 	return KeyValue[CommitID, Key, Value, Change]{
+		storagePath:        storagePath,
+		refGen:             refGen,
+		rawMap:             rawMap,
 		Histories:          make(map[Key]*History[CommitID, Value, Change]),
 		createValueHistory: createValueHistory,
 	}

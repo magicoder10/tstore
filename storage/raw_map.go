@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"io/ioutil"
 	"os"
 	"path"
@@ -33,7 +32,7 @@ func (l LocalFileMap) Set(key string, data []byte) error {
 		return err
 	}
 
-	return ioutil.WriteFile(path.Join(l.rootDir, key), data, os.ModePerm)
+	return ioutil.WriteFile(filePath, data, os.ModePerm)
 }
 
 func (l LocalFileMap) Contain(key string) (bool, error) {
@@ -42,7 +41,7 @@ func (l LocalFileMap) Contain(key string) (bool, error) {
 		return true, nil
 	}
 
-	if errors.Is(err, os.ErrNotExist) {
+	if os.IsNotExist(err) {
 		return false, nil
 	}
 
@@ -50,7 +49,7 @@ func (l LocalFileMap) Contain(key string) (bool, error) {
 }
 
 func (l LocalFileMap) Delete(key string) error {
-	return os.Remove(path.Join(l.rootDir, key))
+	return os.RemoveAll(path.Join(l.rootDir, key))
 }
 
 func NewLocalFileMap(rootDir string) *LocalFileMap {
