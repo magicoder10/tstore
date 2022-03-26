@@ -18,7 +18,8 @@ type Map[Key types.Comparable, value any] struct {
 }
 
 func (m Map[Key, Value]) Get(key Key) (Value, error) {
-	buf, err := m.rawMap.Get(m.itemKeyPath(key))
+	itemKeyPath := m.itemKeyPath(key)
+	buf, err := m.rawMap.Get(itemKeyPath)
 	if err != nil {
 		return *new(Value), err
 	}

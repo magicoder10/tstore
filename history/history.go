@@ -59,7 +59,7 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 	var versions []Version[Value]
 
 	for _, commitID := range inBetweenCommitIDs {
-		versionStatus, err := h.commitsMap.Get(endCommitID)
+		versionStatus, err := h.commitsMap.Get(commitID)
 		if err != nil {
 			log.Println(err)
 			return []Version[Value]{}, err

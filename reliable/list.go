@@ -408,6 +408,5 @@ func createNode(refGen *idgen.IDGen, listPath string) (string, error) {
 		return "", err
 	}
 
-	//log.Printf("[List][createNode] ref=%v\n", ref)
 	return path.Join(listPath, "nodes", strconv.FormatUint(ref, 10)), nil
 }
