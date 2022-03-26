@@ -19,12 +19,12 @@ type KeyValue[
 	storagePath        string
 	refGen             *idgen.IDGen
 	rawMap             storage.RawMap
-	histories          reliable.Map[Key, bool]
+	historyKeys        reliable.Map[Key, bool]
 	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error)
 }
 
 func (k KeyValue[CommitID, Key, Value, Change]) FindLatestValueAt(targetCommitID CommitID, key Key) (Value, bool, error) {
-	contain, err := k.histories.Contain(key)
+	contain, err := k.historyKeys.Contain(key)
 	if err != nil {
 		log.Println(err)
 		return *new(Value), false, err
@@ -46,7 +46,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindLatestValueAt(targetCommitID
 func (k KeyValue[CommitID, Key, Value, Change]) ListAllLatestValuesAt(targetCommitID CommitID) (map[Key]Value, bool, error) {
 	pairs := make(map[Key]Value)
 	var present bool
-	keys, err := k.histories.Keys()
+	keys, err := k.historyKeys.Keys()
 	if err != nil {
 		log.Println(err)
 		return nil, false, err
@@ -77,7 +77,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindChangesBetween(
 	endCommitID CommitID,
 	key Key,
 ) ([]Version[Value], error) {
-	contain, err := k.histories.Contain(key)
+	contain, err := k.historyKeys.Contain(key)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -102,7 +102,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) FindAllChangesBetween(
 ) (map[Key][]Version[Value], error) {
 	values := make(map[Key][]Version[Value])
 
-	keys, err := k.histories.Keys()
+	keys, err := k.historyKeys.Keys()
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -134,7 +134,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 		key,
 		versionStatus,
 		change)
-	contain, err := k.histories.Contain(key)
+	contain, err := k.historyKeys.Contain(key)
 	if err != nil {
 		log.Println(err)
 		return false, err
@@ -142,7 +142,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 
 	if !contain {
 		log.Println("[KeyValue][AddVersion] create history")
-		err = k.histories.Set(key, true)
+		err = k.historyKeys.Set(key, true)
 		if err != nil {
 			log.Println(err)
 			return false, err
@@ -172,7 +172,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) AddVersion(
 
 func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID) (bool, error) {
 	var hasDeletion bool
-	keys, err := k.histories.Keys()
+	keys, err := k.historyKeys.Keys()
 	if err != nil {
 		log.Println(err)
 		return false, err
@@ -212,7 +212,7 @@ func NewKeyValue[
 	rawMap storage.RawMap,
 	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error),
 ) (KeyValue[CommitID, Key, Value, Change], error) {
-	histories, err := reliable.NewMap[Key, bool](path.Join(storagePath, "histories"), refGen, rawMap)
+	historyKeys, err := reliable.NewMap[Key, bool](path.Join(storagePath, "historyKeys"), refGen, rawMap)
 	if err != nil {
 		return *new(KeyValue[CommitID, Key, Value, Change]), err
 	}
@@ -221,7 +221,7 @@ func NewKeyValue[
 		storagePath:        storagePath,
 		refGen:             refGen,
 		rawMap:             rawMap,
-		histories:          histories,
+		historyKeys:        historyKeys,
 		createValueHistory: createValueHistory,
 	}, nil
 }
