@@ -18,78 +18,8 @@ type List[Item any] struct {
 }
 
 func (l *List[Item]) Append(item Item) error {
-	nodeRefPath, err := l.createNode()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	buf, err := json.Marshal(item)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	nodeDataPath := path.Join(nodeRefPath, "data")
-	err = l.rawMap.Set(nodeDataPath, buf)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	tailPath := l.tailPath()
-	tailRefBuf, err := l.rawMap.Get(tailPath)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	nodePrevPath := path.Join(nodeRefPath, "prev")
-	err = l.rawMap.Set(nodePrevPath, tailRefBuf)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	nodeRefBuf, err := json.Marshal(nodeRefPath)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	err = l.rawMap.Set(tailPath, nodeRefBuf)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	var tailNodeRef string
-	err = json.Unmarshal(tailRefBuf, &tailNodeRef)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	tailNextRefPath := path.Join(tailNodeRef, "next")
-	err = l.rawMap.Set(tailNextRefPath, nodeRefBuf)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	length, err := l.Length()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	buf, err = json.Marshal(length + 1)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	return l.rawMap.Set(l.lengthPath(), buf)
+	_, err := l.append(item)
+	return err
 }
 
 func (l *List[Item]) Peek() (Item, error) {
@@ -103,21 +33,14 @@ func (l *List[Item]) Peek() (Item, error) {
 		return *new(Item), errors.New("list must have at least 1 item")
 	}
 
-	buf, err := l.rawMap.Get(l.tailPath())
-	if err != nil {
-		log.Println(err)
-		return *new(Item), err
-	}
-
-	var nodeRefPath string
-	err = json.Unmarshal(buf, &nodeRefPath)
+	nodeRefPath, err := l.getNodeRefPath(l.tailPath())
 	if err != nil {
 		log.Println(err)
 		return *new(Item), err
 	}
 
 	nodeDataPath := path.Join(nodeRefPath, "data")
-	buf, err = l.rawMap.Get(nodeDataPath)
+	buf, err := l.rawMap.Get(nodeDataPath)
 	if err != nil {
 		log.Println(err)
 		return *new(Item), err
@@ -158,28 +81,13 @@ func (l *List[Item]) Pop() (Item, error) {
 		return *new(Item), err
 	}
 
-	tailPath := l.tailPath()
-	tailRef, err := l.rawMap.Get(tailPath)
+	tailNodeRefPath, err := l.getNodeRefPath(l.tailPath())
 	if err != nil {
 		log.Println(err)
 		return *new(Item), err
 	}
 
-	var tailNodeRefPath string
-	err = json.Unmarshal(tailRef, &tailNodeRefPath)
-	if err != nil {
-		log.Println(err)
-		return *new(Item), err
-	}
-
-	nodePrevPath := path.Join(tailNodeRefPath, "prev")
-	buf, err := l.rawMap.Get(nodePrevPath)
-	if err != nil {
-		log.Println(err)
-		return *new(Item), err
-	}
-
-	err = l.rawMap.Set(tailPath, buf)
+	nodePrevPath, err := l.getNodeRefPath(path.Join(tailNodeRefPath, "prev"))
 	if err != nil {
 		log.Println(err)
 		return *new(Item), err
@@ -191,18 +99,7 @@ func (l *List[Item]) Pop() (Item, error) {
 		return *new(Item), err
 	}
 
-	length, err := l.Length()
-	if err != nil {
-		return *new(Item), err
-	}
-
-	buf, err = json.Marshal(length - 1)
-	if err != nil {
-		log.Println(err)
-		return *new(Item), err
-	}
-
-	err = l.rawMap.Set(l.lengthPath(), buf)
+	err = l.decrementLength()
 	if err != nil {
 		log.Println(err)
 		return *new(Item), err
@@ -240,14 +137,7 @@ func (l List[Item]) Items() ([]Item, error) {
 			break
 		}
 
-		buf, err := l.rawMap.Get(nextPath)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-
-		var currNodeRef string
-		err = json.Unmarshal(buf, &currNodeRef)
+		currNodeRef, err := l.getNodeRefPath(nextPath)
 		if err != nil {
 			log.Println(err)
 			return nil, err
@@ -264,6 +154,176 @@ func (l List[Item]) Items() ([]Item, error) {
 	}
 
 	return items, nil
+}
+
+func (l *List[Item]) append(item Item) (string, error) {
+	nodeRefPath, err := l.createNode()
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	buf, err := json.Marshal(item)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	nodeDataPath := path.Join(nodeRefPath, "data")
+	err = l.rawMap.Set(nodeDataPath, buf)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	tailPath := l.tailPath()
+	tailRefBuf, err := l.rawMap.Get(tailPath)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	nodePrevPath := path.Join(nodeRefPath, "prev")
+	err = l.rawMap.Set(nodePrevPath, tailRefBuf)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	nodeRefBuf, err := json.Marshal(nodeRefPath)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	err = l.rawMap.Set(tailPath, nodeRefBuf)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	var tailNodeRef string
+	err = json.Unmarshal(tailRefBuf, &tailNodeRef)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	tailNextRefPath := path.Join(tailNodeRef, "next")
+	err = l.rawMap.Set(tailNextRefPath, nodeRefBuf)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	length, err := l.Length()
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	buf, err = json.Marshal(length + 1)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	return nodeRefPath, l.rawMap.Set(l.lengthPath(), buf)
+}
+
+func (l *List[Item]) delete(nodePath string) error {
+	contain, err := l.rawMap.Contain(nodePath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	if !contain {
+		return nil
+	}
+
+	prevBuf, err := l.rawMap.Get(path.Join(nodePath, "prev"))
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	var nodePrevPath string
+	err = json.Unmarshal(prevBuf, &nodePrevPath)
+	if err != nil {
+		log.Println(err)
+	}
+
+	nextBuf, err := l.rawMap.Get(path.Join(nodePath, "next"))
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	var nodeNextPath string
+	err = json.Unmarshal(prevBuf, &nodePrevPath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	err = l.rawMap.Set(path.Join(nodePrevPath, "next"), nextBuf)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	err = l.rawMap.Set(path.Join(nodeNextPath, "prev"), prevBuf)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	err = l.decrementLength()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return l.rawMap.Delete(nodePath)
+}
+
+func (l *List[Item]) decrementLength() error {
+	length, err := l.Length()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	buf, err := json.Marshal(length - 1)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	err = l.rawMap.Set(l.lengthPath(), buf)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	return err
+}
+
+func (l *List[Item]) getNodeRefPath(refPath string) (string, error) {
+	buf, err := l.rawMap.Get(refPath)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	var nodeRefPath string
+	err = json.Unmarshal(buf, &nodeRefPath)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return nodeRefPath, err
 }
 
 func (l *List[Item]) lengthPath() string {

@@ -195,9 +195,10 @@ func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 		refGen,
 		rawMap,
 		func(storagePath string) (history.ValueHistory[uint64, uint64, uint64], error) {
-			return history.NewSingleValueHistory[uint64, uint64](storagePath, rawMap), nil
+			return history.NewSingleValueHistory[uint64, uint64](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return EntityValueHistory{}, err
 	}
 
@@ -206,21 +207,28 @@ func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 		refGen,
 		rawMap,
 		func(storagePath string) (history.ValueHistory[uint64, string, string], error) {
-			return history.NewSingleValueHistory[uint64, string](storagePath, rawMap), nil
+			return history.NewSingleValueHistory[uint64, string](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
+		return EntityValueHistory{}, err
+	}
+
+	attributeHistory, err := history.NewKeyValue[uint64, string, interface{}, interface{}](
+		path.Join(storagePath, "attributesHistory"),
+		refGen,
+		rawMap,
+		func(valueStoragePath string) (history.ValueHistory[uint64, interface{}, interface{}], error) {
+			return history.NewSingleValueHistory[uint64, interface{}](valueStoragePath, refGen, rawMap)
+		})
+	if err != nil {
+		log.Println(err)
 		return EntityValueHistory{}, err
 	}
 
 	return EntityValueHistory{
 		idHistory:         idHistory,
 		schemaNameHistory: schemaNameHistory,
-		attributesHistory: history.NewKeyValue[uint64, string, interface{}, interface{}](
-			path.Join(storagePath, "attributesHistory"),
-			refGen,
-			rawMap,
-			func(valueStoragePath string) (history.ValueHistory[uint64, interface{}, interface{}], error) {
-				return history.NewSingleValueHistory[uint64, interface{}](valueStoragePath, rawMap), nil
-			}),
+		attributesHistory: attributeHistory,
 	}, nil
 }

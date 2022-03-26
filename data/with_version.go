@@ -36,23 +36,31 @@ func NewWithVersion(storagePath string, refGen *idgen.IDGen, rawMap storage.RawM
 		return nil, err
 	}
 
-	schemaHistoriesPath := path.Join(storagePath, "schemaHistories")
-	entityHistoriesPath := path.Join(storagePath, "entityHistories")
+	schemaHistories, err := history.NewKeyValue[uint64, string, Schema, Mutation](
+		path.Join(storagePath, "schemaHistories"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, Schema, Mutation], error) {
+			return newSchemaValueHistory(storagePath, refGen, rawMap)
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	entityHistories, err := history.NewKeyValue[uint64, uint64, Entity, Mutation](
+		path.Join(storagePath, "entityHistories"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, Entity, Mutation], error) {
+			return newEntityValueHistory(storagePath, refGen, rawMap)
+		})
+	if err != nil {
+		return nil, err
+	}
+
 	return &WithVersion{
-		commits: commits,
-		SchemaHistories: history.NewKeyValue[uint64, string, Schema, Mutation](
-			schemaHistoriesPath,
-			refGen,
-			rawMap,
-			func(storagePath string) (history.ValueHistory[uint64, Schema, Mutation], error) {
-				return newSchemaValueHistory(storagePath, refGen, rawMap)
-			}),
-		EntityHistories: history.NewKeyValue[uint64, uint64, Entity, Mutation](
-			entityHistoriesPath,
-			refGen,
-			rawMap,
-			func(storagePath string) (history.ValueHistory[uint64, Entity, Mutation], error) {
-				return newEntityValueHistory(storagePath, refGen, rawMap)
-			}),
+		commits:         commits,
+		SchemaHistories: schemaHistories,
+		EntityHistories: entityHistories,
 	}, nil
 }
