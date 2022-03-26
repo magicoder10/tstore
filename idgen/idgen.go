@@ -12,26 +12,26 @@ type IDGen struct {
 	rawMap      storage.RawMap
 	bufferSize  int
 	nextID      uint64
-	nextIDs     chan uint64
+	rangeEnd    uint64
 }
 
 func (i *IDGen) NextID() (uint64, error) {
-	if len(i.nextIDs) == 0 {
+	if i.nextID > i.rangeEnd {
 		nextID := i.nextID + uint64(i.bufferSize)
+		rangeEnd := nextID - 1
+
 		err := i.writeNextID(nextID)
 		if err != nil {
 			return 0, err
 		}
 
-		for count := 0; count < i.bufferSize; count++ {
-			i.nextIDs <- i.nextID
-			i.nextID++
-		}
+		i.rangeEnd = rangeEnd
 	}
 
-	nextID := <-i.nextIDs
-	log.Printf("[IDGen][NextID] storagePath=%v, nextID=%v\n", i.storagePath, nextID)
-	return nextID, nil
+	id := i.nextID
+	i.nextID++
+	log.Printf("[IDGen][NextID] storagePath=%v, nextID=%v\n", i.storagePath, i.nextID)
+	return id, nil
 }
 
 func (i IDGen) writeNextID(nextID uint64) error {
@@ -52,7 +52,7 @@ func New(storagePath string, rawMap storage.RawMap, bufferSize int) (*IDGen, err
 
 	}
 
-	var nextID uint64
+	var nextID uint64 = 1
 	if exist {
 		nextID, err = readNextID(storagePath, rawMap)
 		if err != nil {
@@ -65,7 +65,7 @@ func New(storagePath string, rawMap storage.RawMap, bufferSize int) (*IDGen, err
 		rawMap:      rawMap,
 		bufferSize:  bufferSize,
 		nextID:      nextID,
-		nextIDs:     make(chan uint64, bufferSize),
+		rangeEnd:    nextID - 1,
 	}, nil
 }
 

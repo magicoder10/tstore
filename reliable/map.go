@@ -68,7 +68,7 @@ func (m Map[Key, Value]) Keys() ([]Key, error) {
 }
 
 func (m Map[Key, Value]) recordKey(key Key) error {
-	keyPath := m.keyPath(key)
+	keyPath := m.keyRefPath(key)
 	contain, err := m.rawMap.Contain(keyPath)
 	if err != nil {
 		log.Println(err)
@@ -100,7 +100,7 @@ func (m Map[Key, Value]) recordKey(key Key) error {
 }
 
 func (m Map[Key, Value]) cleanUpKey(key Key) error {
-	keyPath := m.keyPath(key)
+	keyPath := m.keyRefPath(key)
 	contain, err := m.rawMap.Contain(keyPath)
 	if err != nil {
 		log.Println(err)
@@ -132,8 +132,8 @@ func (m Map[Key, Value]) cleanUpKey(key Key) error {
 	return err
 }
 
-func (m Map[Key, Value]) keyPath(key Key) string {
-	return path.Join(m.storagePath, "keys", fmt.Sprintf("%v", key))
+func (m Map[Key, Value]) keyRefPath(key Key) string {
+	return path.Join(m.storagePath, "keyRefs", fmt.Sprintf("%v", key))
 }
 
 func (m Map[Key, Value]) itemKeyPath(key Key) string {

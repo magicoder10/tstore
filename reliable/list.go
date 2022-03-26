@@ -365,6 +365,17 @@ func NewList[Item any](storagePath string, refGen *idgen.IDGen, rawMap storage.R
 }
 
 func initRefs[Item any](storagePath string, refGen *idgen.IDGen, rawMap storage.RawMap) error {
+	tailPath := path.Join(storagePath, "tail")
+	contains, err := rawMap.Contain(tailPath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	if contains {
+		return nil
+	}
+
 	nodeRefPath, err := createNode(refGen, storagePath)
 	if err != nil {
 		log.Println(err)
@@ -375,17 +386,6 @@ func initRefs[Item any](storagePath string, refGen *idgen.IDGen, rawMap storage.
 	if err != nil {
 		log.Println(err)
 		return err
-	}
-
-	tailPath := path.Join(storagePath, "tail")
-	contains, err := rawMap.Contain(tailPath)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	if contains {
-		return nil
 	}
 
 	err = rawMap.Set(tailPath, refBuf)
@@ -408,5 +408,6 @@ func createNode(refGen *idgen.IDGen, listPath string) (string, error) {
 		return "", err
 	}
 
+	//log.Printf("[List][createNode] ref=%v\n", ref)
 	return path.Join(listPath, "nodes", strconv.FormatUint(ref, 10)), nil
 }

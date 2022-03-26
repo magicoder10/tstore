@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"path"
 
 	"tstore/data"
@@ -11,36 +12,46 @@ import (
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
+	"tstore/reliable"
 	"tstore/storage"
 )
 
 type Server struct {
-	rawMap    storage.RawMap
-	refGen    *idgen.IDGen
-	databases map[string]database.Database
+	rawMap          storage.RawMap
+	refGen          *idgen.IDGen
+	dataStoragePath string
+	databasesMap    reliable.Map[string, bool]
+	databases       map[string]database.Database
 }
 
-func (s Server) ListAllDatabases() []string {
-	dbNames := make([]string, 0)
-	for dbName := range s.databases {
-		dbNames = append(dbNames, dbName)
-	}
-
-	return dbNames
+func (s Server) ListAllDatabases() ([]string, error) {
+	return s.databasesMap.Keys()
 }
 
 func (s Server) CreateDatabase(name string) error {
-	if _, ok := s.databases[name]; ok {
+	contain, err := s.databasesMap.Contain(name)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	if contain {
 		return fmt.Errorf("database already exist: name=%v", name)
 	}
 
-	db, err := database.NewDatabase(name, s.refGen, s.rawMap)
+	err = s.databasesMap.Set(name, true)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	storagePath := path.Join(s.dataStoragePath, name)
+	db, err := database.NewDatabase(storagePath, s.refGen, s.rawMap)
 	if err != nil {
 		return err
 	}
 
 	s.databases[name] = db
-	return writeDatabases(s.ListAllDatabases())
+	return nil
 }
 
 func (s Server) DeleteDatabase(name string) error {
@@ -50,8 +61,9 @@ func (s Server) DeleteDatabase(name string) error {
 	}
 
 	delete(s.databases, name)
-	err := writeDatabases(s.ListAllDatabases())
+	err := s.databasesMap.Delete(name)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -112,21 +124,28 @@ func (s Server) GetLatestCommit(dbName string) (data.Commit, error) {
 }
 
 func newServer() (Server, error) {
-	rawMap := storage.NewLocalFileMap("./userData/map")
-	databases, err := readDatabases()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		databases = make([]string, 0)
-	}
-
+	rawMap := storage.NewLocalFileMap("./userData")
 	dbMap := make(map[string]database.Database)
-	refGen, err := idgen.New(path.Join("idGens", "refGen"), rawMap, 10)
+	refGen, err := idgen.New(path.Join("idGens", "refGen"), rawMap, 5)
 	if err != nil {
 		return Server{}, err
 	}
 
-	for _, dbName := range databases {
-		db, err := database.NewDatabase(dbName, refGen, rawMap)
+	databasesPath := path.Join("databases")
+	databasesMap, err := reliable.NewMap[string, bool](path.Join(databasesPath, "map"), refGen, rawMap)
+	if err != nil {
+		return Server{}, err
+	}
+
+	databaseNames, err := databasesMap.Keys()
+	if err != nil {
+		log.Println(err)
+		return Server{}, err
+	}
+
+	dataStoragePath := path.Join(databasesPath, "data")
+	for _, dbName := range databaseNames {
+		db, err := database.NewDatabase(path.Join(dataStoragePath, dbName), refGen, rawMap)
 		if err != nil {
 			return Server{}, err
 		}
@@ -135,8 +154,10 @@ func newServer() (Server, error) {
 	}
 
 	return Server{
-		rawMap:    rawMap,
-		refGen:    refGen,
-		databases: dbMap,
+		rawMap:          rawMap,
+		refGen:          refGen,
+		dataStoragePath: path.Join(databasesPath, "data"),
+		databasesMap:    databasesMap,
+		databases:       dbMap,
 	}, nil
 }

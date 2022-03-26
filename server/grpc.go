@@ -18,7 +18,8 @@ type GRPCServer struct {
 }
 
 func (g GRPCServer) ListAllDatabases(ctx context.Context, empty *emptypb.Empty) (*proto.Databases, error) {
-	return proto.ToProtoDatabases(g.server.ListAllDatabases()), nil
+	databases, err := g.server.ListAllDatabases()
+	return proto.ToProtoDatabases(databases), err
 }
 
 func (g GRPCServer) CreateDatabase(ctx context.Context, request *proto.CreateDatabaseRequest) (*emptypb.Empty, error) {

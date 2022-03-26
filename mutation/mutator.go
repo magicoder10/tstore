@@ -3,31 +3,43 @@ package mutation
 import (
 	"fmt"
 	"log"
+	"path"
 	"time"
 
 	"tstore/data"
 	"tstore/history"
+	"tstore/idgen"
+	"tstore/reliable"
+	"tstore/storage"
 
 	"golang.org/x/sync/errgroup"
 )
 
-const bufferSize = 500
+const transactionBufferSize = 500
+const idGenBufferSize = 100
 
 type Mutator struct {
 	dataWithVersion        *data.WithVersion
-	transactionStorage     TransactionStorage
-	entityIDGen            IDGen
-	transactionIDGen       IDGen
+	entityIDGen            *idgen.IDGen
+	transactionIDGen       *idgen.IDGen
+	transactions           reliable.List[Transaction]
+	transactionStatus      reliable.Map[uint64, TransactionStatus]
 	incomingTransactions   chan Transaction
 	onTransactionProcessed chan uint64
 }
 
 func (m Mutator) CreateTransaction(transactionInput TransactionInput) error {
+	id, err := m.transactionIDGen.NextID()
+	if err != nil {
+		return err
+	}
+
 	ts := Transaction{
-		ID:        m.transactionIDGen.NextID(),
+		ID:        id,
 		Mutations: transactionInput.Mutations,
 	}
-	err := m.transactionStorage.WriteTransaction(ts)
+
+	err = m.transactions.Append(ts)
 	if err != nil {
 		return err
 	}
@@ -40,11 +52,21 @@ func (m *Mutator) Start() {
 	go func() {
 		for transaction := range m.incomingTransactions {
 			err := m.commitTransaction(transaction)
-			if err != nil {
+			if err == nil {
+				err = m.transactionStatus.Set(transaction.ID, transactionCommitted)
+				if err != nil {
+					log.Println(err)
+				}
+			} else {
 				log.Printf("fail to commit transaction: transaction=%v error=%v\n", transaction.ID, err)
 				err = m.rollbackTransaction(transaction.ID)
 				if err != nil {
 					log.Println(err)
+				} else {
+					err = m.transactionStatus.Set(transaction.ID, transactionAborted)
+					if err != nil {
+						log.Println(err)
+					}
 				}
 			}
 
@@ -57,9 +79,8 @@ func (m *Mutator) Start() {
 
 func (m *Mutator) commitTransaction(transaction Transaction) error {
 	log.Printf("[commitTransaction] %v\n", transaction)
-	err := m.transactionStorage.WriteTransactionLog(TransactionStartLogLine{
-		TransactionID: transaction.ID,
-	})
+
+	err := m.transactionStatus.Set(transaction.ID, transactionStarted)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -71,7 +92,7 @@ func (m *Mutator) commitTransaction(transaction Transaction) error {
 		mutations := mutations
 		errGroup.Go(func() error {
 			for _, mutation := range mutations {
-				err := m.commitMutation(transaction.ID, mutation)
+				err = m.commitMutation(transaction.ID, mutation)
 				if err != nil {
 					log.Println(err)
 					return err
@@ -279,7 +300,12 @@ func (m Mutator) commitCreateEntityMutation(transactionID uint64, mutation data.
 		return err
 	}
 
-	entityID := m.entityIDGen.NextID()
+	entityID, err := m.entityIDGen.NextID()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
 	mutation.EntityInput.EntityID = entityID
 	_, err = m.dataWithVersion.EntityHistories.AddVersion(transactionID, entityID, history.CreatedVersionStatus, mutation)
 	if err != nil {
@@ -529,33 +555,41 @@ func validateEntityAttribute(dataType data.Type, value interface{}) error {
 }
 
 func NewMutator(
+	storagePath string,
+	refGen *idgen.IDGen,
+	rawMap storage.RawMap,
 	dataWithVersion *data.WithVersion,
-	dbName string,
 ) (*Mutator, error) {
-	transactionStorage, err := NewTransactionStorage(dbName)
+	entityIDGen, err := idgen.New(path.Join(storagePath, "idGens", "entity"), rawMap, idGenBufferSize)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 
-	entityIDGen, err := newIDGen(dbName, "entity")
+	transactionIDGen, err := idgen.New(path.Join(storagePath, "idGens", "transaction"), rawMap, idGenBufferSize)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 
-	transactionIDGen, err := newIDGen(dbName, "transaction")
+	transactions, err := reliable.NewList[Transaction](path.Join(storagePath, "transactions"), refGen, rawMap)
 	if err != nil {
-		log.Println(err)
+		return nil, err
+	}
+
+	transactionStatus, err := reliable.NewMap[uint64, TransactionStatus](
+		path.Join(storagePath, "transactionsStatus"), refGen, rawMap)
+	if err != nil {
 		return nil, err
 	}
 
 	return &Mutator{
 		dataWithVersion:        dataWithVersion,
-		transactionStorage:     transactionStorage,
 		entityIDGen:            entityIDGen,
 		transactionIDGen:       transactionIDGen,
-		incomingTransactions:   make(chan Transaction, bufferSize),
+		transactions:           transactions,
+		transactionStatus:      transactionStatus,
+		incomingTransactions:   make(chan Transaction, transactionBufferSize),
 		onTransactionProcessed: make(chan uint64),
 	}, nil
 }
