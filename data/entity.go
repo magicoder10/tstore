@@ -198,6 +198,7 @@ func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 			return history.NewSingleValueHistory[uint64, uint64](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return EntityValueHistory{}, err
 	}
 
@@ -209,6 +210,7 @@ func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 			return history.NewSingleValueHistory[uint64, string](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return EntityValueHistory{}, err
 	}
 
@@ -220,6 +222,7 @@ func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 			return history.NewSingleValueHistory[uint64, interface{}](valueStoragePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return EntityValueHistory{}, err
 	}
 

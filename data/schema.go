@@ -155,6 +155,7 @@ func newSchemaValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 			return history.NewSingleValueHistory[uint64, string](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return SchemaValueHistory{}, err
 	}
 
@@ -166,6 +167,7 @@ func newSchemaValueHistory(storagePath string, refGen *idgen.IDGen, rawMap stora
 			return history.NewSingleValueHistory[uint64, Type](storagePath, refGen, rawMap)
 		})
 	if err != nil {
+		log.Println(err)
 		return SchemaValueHistory{}, err
 	}
 

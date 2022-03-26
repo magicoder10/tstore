@@ -51,6 +51,7 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 ) ([]Version[Value], error) {
 	commits, err := h.commitHistory.Items()
 	if err != nil {
+		log.Println(err)
 		return []Version[Value]{}, err
 	}
 
@@ -87,6 +88,7 @@ func (h *History[CommitID, Value, Change]) AddVersion(
 ) (bool, error) {
 	contain, err := h.commitsMap.Contain(commitID)
 	if err != nil {
+		log.Println(err)
 		return false, err
 	}
 
@@ -115,6 +117,7 @@ func (h *History[CommitID, Value, Change]) AddVersion(
 func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) (bool, error) {
 	contain, err := h.commitsMap.Contain(commitID)
 	if err != nil {
+		log.Println(err)
 		return false, err
 	}
 
@@ -169,6 +172,7 @@ func New[
 
 	reliableMap, err := reliable.NewMap[CommitID, VersionStatus](path.Join(storagePath, "commits"), refGen, rawMap)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 

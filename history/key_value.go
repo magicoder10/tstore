@@ -16,11 +16,10 @@ type KeyValue[
 	Key types.Comparable,
 	Value any,
 	Change any] struct {
-	storagePath string
-	refGen      *idgen.IDGen
-	rawMap      storage.RawMap
-	histories   reliable.Map[Key, bool]
-	//Histories          map[Key]*History[CommitID, Value, Change] `json:"histories"`
+	storagePath        string
+	refGen             *idgen.IDGen
+	rawMap             storage.RawMap
+	histories          reliable.Map[Key, bool]
 	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error)
 }
 
@@ -182,6 +181,7 @@ func (k KeyValue[CommitID, Key, Value, Change]) RemoveVersion(commitID CommitID)
 	for _, key := range keys {
 		hist, err := k.getHistory(key)
 		if err != nil {
+			log.Println(err)
 			return false, err
 		}
 

@@ -73,6 +73,7 @@ func NewSingleValueHistory[CommitID types.Comparable, Value any](
 ) (*SingleValueHistory[CommitID, Value], error) {
 	commitsMap, err := reliable.NewMap[CommitID, Value](path.Join(storagePath, "commits"), refGen, rawMap)
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
