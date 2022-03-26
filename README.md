@@ -19,8 +19,8 @@ The next generation data store optimized for
 - [ ] Query the change of entities between 2 given commits
 - [ ] Query schemas for a give DB
 - [ ] Notify client when the transaction is committed
-- [ ] Abort uncommitted transaction
-- [ ] Persist versioned entities & schema
+- [x] Abort uncommitted transaction
+- [x] Persist versioned entities & schema
 - [ ] Design data transformation language & APIs
 - [ ] User management & access control
 - [ ] Real time query subscription
