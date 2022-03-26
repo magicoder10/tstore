@@ -3,6 +3,7 @@ package database
 import (
 	"tstore/data"
 	"tstore/history"
+	"tstore/idgen"
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
@@ -11,7 +12,7 @@ import (
 
 type Database struct {
 	databaseStorage Storage
-	dataStorage     *data.Storage
+	dataWithVersion *data.WithVersion
 	mutator         *mutation.Mutator
 	queryExecutor   query.Executor
 }
@@ -36,36 +37,38 @@ func (d Database) QueryEntitiesBetweenCommits(
 }
 
 func (d Database) GetLatestCommit() (data.Commit, error) {
-	commits, err := d.dataStorage.ReadAllCommits()
+	count, err := d.dataWithVersion.CountCommits()
 	if err != nil {
 		return data.Commit{}, err
 	}
 
-	if len(commits) < 1 {
-		return data.Commit{
-			CommittedTransactionID: 0,
-		}, nil
+	if count < 1 {
+		return data.Commit{}, nil
 	}
 
-	return commits[len(commits)-1], nil
+	return d.dataWithVersion.GetLatestCommit()
 }
 
 func (d Database) DeleteAllData() error {
 	return d.databaseStorage.DeleteAllData()
 }
 
-func NewDatabase(name string, rawMap storage.RawMap) (Database, error) {
-	dataStorage := data.NewStorage(name, rawMap)
-	mutator, err := mutation.NewMutator(dataStorage, name)
+func NewDatabase(name string, refGen *idgen.IDGen, rawMap storage.RawMap) (Database, error) {
+	dataWithVersion, err := data.NewWithVersion(name, refGen, rawMap)
 	if err != nil {
 		return Database{}, err
 	}
-	mutator.Start()
 
+	mutator, err := mutation.NewMutator(dataWithVersion, name)
+	if err != nil {
+		return Database{}, err
+	}
+
+	mutator.Start()
 	return Database{
 		databaseStorage: newStorage(name),
-		dataStorage:     dataStorage,
+		dataWithVersion: dataWithVersion,
 		mutator:         mutator,
-		queryExecutor:   query.NewExecutor(dataStorage),
+		queryExecutor:   query.NewExecutor(dataWithVersion),
 	}, nil
 }

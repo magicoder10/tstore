@@ -2,10 +2,12 @@ package server
 
 import (
 	"fmt"
+	"path"
 
 	"tstore/data"
 	"tstore/database"
 	"tstore/history"
+	"tstore/idgen"
 	"tstore/mutation"
 	"tstore/query"
 	"tstore/query/lang"
@@ -14,6 +16,7 @@ import (
 
 type Server struct {
 	rawMap    storage.RawMap
+	refGen    *idgen.IDGen
 	databases map[string]database.Database
 }
 
@@ -31,7 +34,7 @@ func (s Server) CreateDatabase(name string) error {
 		return fmt.Errorf("database already exist: name=%v", name)
 	}
 
-	db, err := database.NewDatabase(name, s.rawMap)
+	db, err := database.NewDatabase(name, s.refGen, s.rawMap)
 	if err != nil {
 		return err
 	}
@@ -117,8 +120,13 @@ func newServer() (Server, error) {
 	}
 
 	dbMap := make(map[string]database.Database)
+	refGen, err := idgen.New(path.Join("idGens", "refGen"), rawMap, 10)
+	if err != nil {
+		return Server{}, err
+	}
+
 	for _, dbName := range databases {
-		db, err := database.NewDatabase(dbName, rawMap)
+		db, err := database.NewDatabase(dbName, refGen, rawMap)
 		if err != nil {
 			return Server{}, err
 		}
@@ -128,6 +136,7 @@ func newServer() (Server, error) {
 
 	return Server{
 		rawMap:    rawMap,
+		refGen:    refGen,
 		databases: dbMap,
 	}, nil
 }

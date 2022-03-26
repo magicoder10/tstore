@@ -2,7 +2,11 @@ package history
 
 import (
 	"log"
+	"path"
 
+	"tstore/idgen"
+	"tstore/reliable"
+	"tstore/storage"
 	"tstore/types"
 )
 
@@ -12,11 +16,17 @@ type History[
 	Change any] struct {
 	CommitMap     map[CommitID]VersionStatus            `json:"commit_map"`
 	ValueHistory  ValueHistory[CommitID, Value, Change] `json:"value_history"`
-	CommitHistory []CommitID                            `json:"commit_history"`
+	CommitHistory reliable.List[CommitID]
 }
 
 func (h History[CommitID, Value, Change]) Value(targetCommitID CommitID) (Value, bool, error) {
-	endCommitID, found := findLargestSmallerThan[CommitID](h.CommitHistory, targetCommitID)
+	commits, err := h.CommitHistory.Items()
+	if err != nil {
+		log.Println(err)
+		return *new(Value), false, err
+	}
+
+	endCommitID, found := findLargestSmallerThan[CommitID](commits, targetCommitID)
 	if !found {
 		return *new(Value), false, nil
 	}
@@ -33,7 +43,12 @@ func (h History[CommitID, Value, Change]) ChangesBetween(
 	beginCommitID CommitID,
 	endCommitID CommitID,
 ) ([]Version[Value], error) {
-	inBetweenCommitIDs := findAllInBetween(h.CommitHistory, beginCommitID, endCommitID)
+	commits, err := h.CommitHistory.Items()
+	if err != nil {
+		return []Version[Value]{}, err
+	}
+
+	inBetweenCommitIDs := findAllInBetween(commits, beginCommitID, endCommitID)
 	var versions []Version[Value]
 
 	for _, commitID := range inBetweenCommitIDs {
@@ -70,13 +85,18 @@ func (h *History[CommitID, Value, Change]) AddVersion(
 	if versionStatus != DeletedVersionStatus {
 		updated, err = h.ValueHistory.AddVersion(commitID, change)
 		if err != nil {
+			log.Println(err)
 			return false, err
 		}
 	}
 
-	h.CommitHistory = append(h.CommitHistory, commitID)
-	h.CommitMap[commitID] = versionStatus
+	err = h.CommitHistory.Append(commitID)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
 
+	h.CommitMap[commitID] = versionStatus
 	return updated, nil
 }
 
@@ -92,7 +112,20 @@ func (h *History[CommitID, Value, Change]) RemoveVersion(commitID CommitID) (boo
 		return false, err
 	}
 
-	h.CommitHistory = h.CommitHistory[:len(h.CommitHistory)-1]
+	commitLen, err := h.CommitHistory.Length()
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+
+	if commitLen > 0 {
+		_, err = h.CommitHistory.Pop()
+		if err != nil {
+			log.Println(err)
+			return false, err
+		}
+	}
+
 	delete(h.CommitMap, commitID)
 	return removed, nil
 }
@@ -101,13 +134,29 @@ func New[
 	CommitID types.Comparable,
 	Value any,
 	Change any](
-	valueHistory ValueHistory[CommitID, Value, Change],
-) *History[CommitID, Value, Change] {
+	storagePath string,
+	refGen *idgen.IDGen,
+	rawMap storage.RawMap,
+	createValueHistory func(storagePath string) (ValueHistory[CommitID, Value, Change], error),
+) (*History[CommitID, Value, Change], error) {
+	commitHistoryPath := path.Join(storagePath, "commitHistory")
+	commitIDs, err := reliable.NewList[CommitID](commitHistoryPath, refGen, rawMap)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	valueHistory, err := createValueHistory(path.Join(storagePath, "valueHistory"))
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
 	return &History[CommitID, Value, Change]{
 		CommitMap:     make(map[CommitID]VersionStatus),
 		ValueHistory:  valueHistory,
-		CommitHistory: make([]CommitID, 0),
-	}
+		CommitHistory: commitIDs,
+	}, nil
 }
 
 func findAllInBetween[Item types.Comparable](sortedItems []Item, begin Item, end Item) []Item {

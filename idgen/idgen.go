@@ -2,6 +2,7 @@ package idgen
 
 import (
 	"encoding/json"
+	"log"
 
 	"tstore/storage"
 )
@@ -12,10 +13,9 @@ type IDGen struct {
 	bufferSize  int
 	nextID      uint64
 	nextIDs     chan uint64
-	remain      uint64
 }
 
-func (i IDGen) NextID() (uint64, error) {
+func (i *IDGen) NextID() (uint64, error) {
 	if len(i.nextIDs) == 0 {
 		nextID := i.nextID + uint64(i.bufferSize)
 		err := i.writeNextID(nextID)
@@ -29,29 +29,38 @@ func (i IDGen) NextID() (uint64, error) {
 		}
 	}
 
-	return <-i.nextIDs, nil
+	nextID := <-i.nextIDs
+	log.Printf("[IDGen][NextID] storagePath=%v, nextID=%v\n", i.storagePath, nextID)
+	return nextID, nil
 }
 
 func (i IDGen) writeNextID(nextID uint64) error {
-	buf, err := json.Marshal(nextID)
-	if err != nil {
-		return err
-	}
-
-	return i.rawMap.Set(i.storagePath, buf)
+	return writeNextID(i.storagePath, i.rawMap, nextID)
 }
 
 func (i IDGen) readNextID() (uint64, error) {
 	return readNextID(i.storagePath, i.rawMap)
 }
 
-func New(storagePath string, rawMap storage.RawMap, bufferSize int) (IDGen, error) {
-	nextID, err := readNextID(storagePath, rawMap)
+func New(storagePath string, rawMap storage.RawMap, bufferSize int) (*IDGen, error) {
+	exist, err := rawMap.Contain(storagePath)
 	if err != nil {
-		return IDGen{}, err
+		return nil, err
 	}
 
-	return IDGen{
+	if !exist {
+
+	}
+
+	var nextID uint64
+	if exist {
+		nextID, err = readNextID(storagePath, rawMap)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &IDGen{
 		storagePath: storagePath,
 		rawMap:      rawMap,
 		bufferSize:  bufferSize,
@@ -73,4 +82,13 @@ func readNextID(path string, rawMap storage.RawMap) (uint64, error) {
 	}
 
 	return nextID, nil
+}
+
+func writeNextID(path string, rawMap storage.RawMap, nextID uint64) error {
+	buf, err := json.Marshal(nextID)
+	if err != nil {
+		return err
+	}
+
+	return rawMap.Set(path, buf)
 }

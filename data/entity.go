@@ -5,6 +5,7 @@ import (
 	"path"
 
 	"tstore/history"
+	"tstore/idgen"
 	"tstore/storage"
 )
 
@@ -188,17 +189,38 @@ func (e EntityValueHistory) RemoveVersion(commitID uint64) (bool, error) {
 	return histRemoved || schemaNameRemoved || attributesRemoved, nil
 }
 
-func newEntityValueHistory(storagePath string, rawMap storage.RawMap) EntityValueHistory {
-	return EntityValueHistory{
-		idHistory: history.New[uint64, uint64, uint64](
-			history.NewSingleValueHistory[uint64, uint64](
-				path.Join(storagePath, "idHistory"), rawMap)),
-		schemaNameHistory: history.New[uint64, string, string](
-			history.NewSingleValueHistory[uint64, string](
-				path.Join(storagePath, "schemaNameHistory"), rawMap)),
-		attributesHistory: history.NewKeyValue[uint64, string, interface{}, interface{}](func(attribute string) history.ValueHistory[uint64, interface{}, interface{}] {
-			return history.NewSingleValueHistory[uint64, interface{}](
-				path.Join(storagePath, "attributesHistory", attribute), rawMap)
-		}),
+func newEntityValueHistory(storagePath string, refGen *idgen.IDGen, rawMap storage.RawMap) (EntityValueHistory, error) {
+	idHistory, err := history.New[uint64, uint64, uint64](
+		path.Join(storagePath, "idHistory"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, uint64, uint64], error) {
+			return history.NewSingleValueHistory[uint64, uint64](storagePath, rawMap), nil
+		})
+	if err != nil {
+		return EntityValueHistory{}, err
 	}
+
+	schemaNameHistory, err := history.New[uint64, string, string](
+		path.Join(storagePath, "schemaNameHistory"),
+		refGen,
+		rawMap,
+		func(storagePath string) (history.ValueHistory[uint64, string, string], error) {
+			return history.NewSingleValueHistory[uint64, string](storagePath, rawMap), nil
+		})
+	if err != nil {
+		return EntityValueHistory{}, err
+	}
+
+	return EntityValueHistory{
+		idHistory:         idHistory,
+		schemaNameHistory: schemaNameHistory,
+		attributesHistory: history.NewKeyValue[uint64, string, interface{}, interface{}](
+			path.Join(storagePath, "attributesHistory"),
+			refGen,
+			rawMap,
+			func(valueStoragePath string) (history.ValueHistory[uint64, interface{}, interface{}], error) {
+				return history.NewSingleValueHistory[uint64, interface{}](valueStoragePath, rawMap), nil
+			}),
+	}, nil
 }
