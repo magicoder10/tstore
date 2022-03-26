@@ -2,7 +2,6 @@ package idgen
 
 import (
 	"encoding/json"
-	"log"
 
 	"tstore/storage"
 )
@@ -30,7 +29,6 @@ func (i *IDGen) NextID() (uint64, error) {
 
 	id := i.nextID
 	i.nextID++
-	log.Printf("[IDGen][NextID] storagePath=%v, nextID=%v\n", i.storagePath, i.nextID)
 	return id, nil
 }
 
